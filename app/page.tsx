@@ -18,6 +18,11 @@ export default function HomePage() {
     (today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24),
   );
 
+  const labelStyle = {
+    opacity: 0.9,
+    textShadow: '0 0 4px rgba(0, 0, 0, 0.5)',
+  } as const;
+
   return (
     <main
       style={{
@@ -32,10 +37,10 @@ export default function HomePage() {
     >
       {isToday ? (
         <>
-          <h1 style={{ fontSize: '4rem', color: 'red' }}>YES</h1>
-          <p style={{ marginTop: '1rem', fontSize: '1.5rem' }}>
+          <h1 style={{ ...labelStyle, fontSize: '4rem', color: 'red' }}>YES</h1>
+          <p style={{ ...labelStyle, marginTop: '1rem', fontSize: '1.5rem' }}>
             <a
-              href={`https://www.google.com/maps/search/${encodeURIComponent(data.street)}`}
+              href={`https://www.google.com/maps/search/${encodeURIComponent(`${data.street}, Chisinau`)}`}
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -45,8 +50,10 @@ export default function HomePage() {
         </>
       ) : (
         <>
-          <h1 style={{ fontSize: '4rem', color: 'green' }}>NO</h1>
-          <p style={{ marginTop: '1rem', fontSize: '1.5rem' }}>
+          <h1 style={{ ...labelStyle, fontSize: '4rem', color: 'green' }}>
+            NO
+          </h1>
+          <p style={{ ...labelStyle, marginTop: '1rem', fontSize: '1.5rem' }}>
             {daysSince} days since last fire.
           </p>
         </>
