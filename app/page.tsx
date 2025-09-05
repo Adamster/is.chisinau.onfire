@@ -1,10 +1,16 @@
 'use client';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getLastFire } from '../src/shared/api/fire';
 
 export default function HomePage() {
   const { data } = useQuery({ queryKey: ['lastFire'], queryFn: getLastFire });
-  const today = new Date();
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   if (!data) {
     return (
@@ -13,10 +19,12 @@ export default function HomePage() {
   }
 
   const lastDate = new Date(data.datetime);
-  const isToday = lastDate.toDateString() === today.toDateString();
-  const daysSince = Math.floor(
-    (today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24),
-  );
+  const isToday = lastDate.toDateString() === now.toDateString();
+  const diffMs = now.getTime() - lastDate.getTime();
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diffMs / (1000 * 60 * 60)) % 24);
+  const minutes = Math.floor((diffMs / (1000 * 60)) % 60);
+  const seconds = Math.floor((diffMs / 1000) % 60);
 
   const labelStyle = {
     opacity: 0.9,
@@ -53,8 +61,11 @@ export default function HomePage() {
           <h1 style={{ ...labelStyle, fontSize: '4rem', color: 'green' }}>
             NO
           </h1>
-          <p style={{ ...labelStyle, marginTop: '1rem', fontSize: '1.5rem' }}>
-            {daysSince} days since last fire.
+          <p
+            style={{ ...labelStyle, marginTop: '1rem', fontSize: '1.5rem' }}
+            data-testid="countdown"
+          >
+            {`${days}d ${hours}h ${minutes}m ${seconds}s since last fire.`}
           </p>
         </>
       )}
