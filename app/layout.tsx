@@ -1,6 +1,8 @@
 import Providers from './providers';
 import { getLastFire } from '../src/shared/api/fire';
 
+export const dynamic = 'force-dynamic';
+
 export default async function RootLayout({
   children,
 }: {
@@ -14,6 +16,7 @@ export default async function RootLayout({
           backgroundImage: incident ? `url(${incident.photo_url})` : undefined,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
+          backgroundColor: '#000',
           margin: 0,
           minHeight: '100vh',
         }}
