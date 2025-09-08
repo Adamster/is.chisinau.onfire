@@ -11,4 +11,8 @@ test('home page shows fire status', async ({ page }) => {
   await page.waitForTimeout(1100);
   const second = await counter.textContent();
   expect(first).not.toBe(second);
+
+  const stats = page.getByTestId('stats');
+  await expect(stats).toBeVisible();
+  await expect(stats).toHaveText('1 this month / 2 this year');
 });

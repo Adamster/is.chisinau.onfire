@@ -1,10 +1,14 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getLastFire } from '../src/shared/api/fire';
+import { getLastFire, getFireStats } from '../src/shared/api/fire';
 
 export default function HomePage() {
   const { data } = useQuery({ queryKey: ['lastFire'], queryFn: getLastFire });
+  const { data: stats } = useQuery({
+    queryKey: ['fireStats'],
+    queryFn: getFireStats,
+  });
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -73,6 +77,19 @@ export default function HomePage() {
             {`${days}d ${hours}h ${minutes}m ${seconds}s since last fire.`}
           </p>
         </>
+      )}
+      {stats && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '1rem',
+            right: '1rem',
+            ...labelStyle,
+          }}
+          data-testid="stats"
+        >
+          {`${stats.month} this month / ${stats.year} this year`}
+        </div>
       )}
     </main>
   );
