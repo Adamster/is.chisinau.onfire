@@ -31,3 +31,31 @@ export async function getLastFire(): Promise<FireIncident | null> {
 
   return parsed.data[0] ?? null;
 }
+
+export const FireStatsSchema = z.object({
+  month: z.number(),
+  year: z.number(),
+});
+
+export type FireStats = z.infer<typeof FireStatsSchema>;
+
+export async function getFireStats(): Promise<FireStats> {
+  const now = new Date();
+  const startOfMonth = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    1,
+  ).toISOString();
+  const startOfYear = new Date(now.getFullYear(), 0, 1).toISOString();
+
+  const [monthRes, yearRes] = await Promise.all([
+    client.from('fire_incidents').select('*').gte('datetime', startOfMonth),
+    client.from('fire_incidents').select('*').gte('datetime', startOfYear),
+  ]);
+
+  if (monthRes.error) throw monthRes.error;
+  if (yearRes.error) throw yearRes.error;
+
+  const stats = { month: monthRes.data.length, year: yearRes.data.length };
+  return FireStatsSchema.parse(stats);
+}
