@@ -27,8 +27,12 @@ export default function HomePage() {
   const seconds = Math.floor((diffMs / 1000) % 60);
 
   const labelStyle = {
-    opacity: 0.9,
-    textShadow: '0 0 4px rgba(0, 0, 0, 0.5)',
+    display: 'inline-block',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    color: '#fff',
+    padding: '0.25rem 0.5rem',
+    borderRadius: '0.25rem',
+    textShadow: '0 0 4px rgba(0, 0, 0, 0.8)',
   } as const;
 
   return (
@@ -51,6 +55,7 @@ export default function HomePage() {
               href={`https://www.google.com/maps/search/${encodeURIComponent(`${data.street}, Chisinau`)}`}
               target="_blank"
               rel="noopener noreferrer"
+              style={{ color: 'inherit', textDecoration: 'underline' }}
             >
               {data.street}
             </a>
