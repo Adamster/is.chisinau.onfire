@@ -20,6 +20,7 @@ export default function HomePage() {
   const [selectedIncidentId, setSelectedIncidentId] = useState<number | null>(
     null,
   );
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 1000);
@@ -41,6 +42,17 @@ export default function HomePage() {
       setSelectedIncidentId(incidents[0].id);
     }
   }, [incidents, selectedIncidentId]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   if (!incidents) {
     return (
@@ -98,23 +110,62 @@ export default function HomePage() {
     color: '#fff',
   } as const;
 
+  const sidebarBaseStyle = {
+    position: 'fixed',
+    inset: 0,
+    maxWidth: '360px',
+    width: 'min(90vw, 360px)',
+    padding: '1.5rem 1rem 2rem',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backdropFilter: 'blur(10px)',
+    overflowY: 'auto',
+    zIndex: 1000,
+    boxShadow: '4px 0 18px rgba(0, 0, 0, 0.45)',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '1rem',
+  };
+
   const sidebarStyle = {
-    flex: '1 1 260px',
-    maxWidth: '420px',
-    minWidth: '240px',
-    padding: '1.5rem 1rem',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    backdropFilter: 'blur(6px)',
+    ...sidebarBaseStyle,
+    transform: isSidebarOpen ? 'translateX(0)' : 'translateX(-105%)',
+    transition: 'transform 0.3s ease-in-out',
+    pointerEvents: isSidebarOpen ? 'auto' : 'none',
   } as const;
 
   const contentStyle = {
-    flex: '2 1 420px',
+    flex: '1 1 100%',
     minWidth: '280px',
-    padding: '2rem 1.5rem',
+    padding: '4.5rem 1.5rem 2rem',
     display: 'flex',
-    flexDirection: 'column',
+    flexDirection: 'column' as const,
     alignItems: 'center',
     gap: '2rem',
+  } as const;
+
+  const toggleButtonStyle = {
+    position: 'fixed' as const,
+    top: '1rem',
+    left: '1rem',
+    zIndex: 1100,
+    width: '3rem',
+    height: '3rem',
+    borderRadius: '50%',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    color: '#fff',
+    cursor: 'pointer',
+    display: 'grid',
+    placeItems: 'center',
+    fontSize: '1.5rem',
+    transition: 'background-color 0.2s ease-in-out',
+  } as const;
+
+  const overlayStyle = {
+    position: 'fixed' as const,
+    inset: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    zIndex: 900,
   } as const;
 
   const listButtonBase = {
@@ -150,11 +201,58 @@ export default function HomePage() {
 
   return (
     <main style={containerStyle}>
-      <aside style={sidebarStyle}>
-        <h2
-          style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: 600 }}
+      <button
+        type="button"
+        onClick={() => setSidebarOpen((open) => !open)}
+        aria-label={isSidebarOpen ? 'Hide incident list' : 'Show incident list'}
+        aria-expanded={isSidebarOpen}
+        aria-controls="incident-sidebar"
+        style={toggleButtonStyle}
+      >
+        ☰
+      </button>
+      {isSidebarOpen && (
+        <div
+          role="presentation"
+          onClick={() => setSidebarOpen(false)}
+          style={overlayStyle}
+        />
+      )}
+      <aside
+        id="incident-sidebar"
+        style={sidebarStyle}
+        aria-hidden={!isSidebarOpen}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: '0.5rem',
+          }}
         >
-          Fire incidents
+          <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>
+            Fire incidents
+          </h2>
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Hide incident list"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#fff',
+              fontSize: '1.5rem',
+              cursor: 'pointer',
+              lineHeight: 1,
+            }}
+          >
+            ×
+          </button>
+        </div>
+        <h2
+          style={{ marginBottom: '0.25rem', fontSize: '0.9rem', opacity: 0.7 }}
+        >
+          Select an incident
         </h2>
         <ul
           style={{
@@ -171,7 +269,10 @@ export default function HomePage() {
               <li key={incident.id}>
                 <button
                   type="button"
-                  onClick={() => setSelectedIncidentId(incident.id)}
+                  onClick={() => {
+                    setSelectedIncidentId(incident.id);
+                    setSidebarOpen(false);
+                  }}
                   style={{
                     ...listButtonBase,
                     backgroundColor: isActive
