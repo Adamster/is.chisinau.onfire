@@ -101,14 +101,31 @@ export default function HomePage() {
   } as const;
 
   const containerStyle = {
+    position: 'relative' as const,
     display: 'flex',
     flexDirection: 'row',
     flexWrap: 'wrap',
     minHeight: '100vh',
     width: '100%',
-    background:
-      'radial-gradient(circle at top, rgba(255, 69, 58, 0.2), transparent), #111',
     color: '#fff',
+    overflow: 'hidden',
+    backgroundColor: '#111',
+  } as const;
+
+  const backgroundWrapperStyle = {
+    position: 'absolute' as const,
+    inset: 0,
+    zIndex: 0,
+    pointerEvents: 'none' as const,
+  } as const;
+
+  const backgroundScrimStyle = {
+    position: 'absolute' as const,
+    inset: 0,
+    background:
+      'linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.85) 60%, rgba(0,0,0,0.95) 100%)',
+    zIndex: 1,
+    pointerEvents: 'none' as const,
   } as const;
 
   const sidebarBaseStyle: CSSProperties = {
@@ -142,6 +159,8 @@ export default function HomePage() {
     flexDirection: 'column' as const,
     alignItems: 'center',
     gap: '2rem',
+    position: 'relative' as const,
+    zIndex: 2,
   } as const;
 
   const toggleButtonStyle = {
@@ -191,6 +210,8 @@ export default function HomePage() {
     overflow: 'hidden',
     boxShadow: '0 10px 40px rgba(0, 0, 0, 0.35)',
     border: '1px solid rgba(255, 255, 255, 0.08)',
+    position: 'relative' as const,
+    zIndex: 2,
   } as const;
 
   const formattedSelectedDate = new Date(
@@ -202,6 +223,18 @@ export default function HomePage() {
 
   return (
     <main style={containerStyle}>
+      <div style={backgroundWrapperStyle} aria-hidden>
+        <Image
+          src={selectedIncident.photo_url}
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          style={{ objectFit: 'cover', filter: 'brightness(0.9)' }}
+          unoptimized
+        />
+        <div style={backgroundScrimStyle} />
+      </div>
       <button
         type="button"
         onClick={() => setSidebarOpen((open) => !open)}
@@ -336,24 +369,6 @@ export default function HomePage() {
         <article style={detailCardStyle}>
           <div
             style={{
-              position: 'relative',
-              width: '100%',
-              paddingTop: '56.25%',
-              overflow: 'hidden',
-            }}
-          >
-            <Image
-              src={selectedIncident.photo_url}
-              alt={`Fire incident at ${selectedIncident.street}`}
-              fill
-              sizes="(max-width: 768px) 100vw, 600px"
-              style={{ objectFit: 'cover' }}
-              unoptimized
-              priority
-            />
-          </div>
-          <div
-            style={{
               padding: '1.25rem 1.5rem',
               display: 'grid',
               gap: '0.75rem',
@@ -383,6 +398,7 @@ export default function HomePage() {
             position: 'fixed',
             bottom: '1rem',
             right: '1rem',
+            zIndex: 2,
             ...labelStyle,
           }}
           data-testid="stats"
