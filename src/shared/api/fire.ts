@@ -13,6 +13,24 @@ export type FireIncident = z.infer<typeof FireIncidentSchema>;
 
 const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+export async function getFireIncidents(): Promise<FireIncident[]> {
+  const { data, error } = await client
+    .from('fire_incidents')
+    .select('*')
+    .order('datetime', { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  const parsed = z.array(FireIncidentSchema).safeParse(data);
+  if (!parsed.success) {
+    throw new Error('Invalid data');
+  }
+
+  return parsed.data;
+}
+
 export async function getLastFire(): Promise<FireIncident | null> {
   const { data, error } = await client
     .from('fire_incidents')
