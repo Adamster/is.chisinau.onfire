@@ -1,11 +1,12 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   getFireIncidents,
   getFireStats,
   type FireIncident,
 } from '../src/shared/api/fire';
+import Image from 'next/image';
 
 export default function HomePage() {
   const { data: incidents } = useQuery({
@@ -110,7 +111,7 @@ export default function HomePage() {
     color: '#fff',
   } as const;
 
-  const sidebarBaseStyle = {
+  const sidebarBaseStyle: CSSProperties = {
     position: 'fixed',
     inset: 0,
     maxWidth: '360px',
@@ -122,16 +123,16 @@ export default function HomePage() {
     zIndex: 1000,
     boxShadow: '4px 0 18px rgba(0, 0, 0, 0.45)',
     display: 'flex',
-    flexDirection: 'column' as const,
+    flexDirection: 'column',
     gap: '1rem',
   };
 
-  const sidebarStyle = {
+  const sidebarStyle: CSSProperties = {
     ...sidebarBaseStyle,
     transform: isSidebarOpen ? 'translateX(0)' : 'translateX(-105%)',
     transition: 'transform 0.3s ease-in-out',
     pointerEvents: isSidebarOpen ? 'auto' : 'none',
-  } as const;
+  };
 
   const contentStyle = {
     flex: '1 1 100%',
@@ -341,17 +342,14 @@ export default function HomePage() {
               overflow: 'hidden',
             }}
           >
-            <img
+            <Image
               src={selectedIncident.photo_url}
               alt={`Fire incident at ${selectedIncident.street}`}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-              }}
+              fill
+              sizes="(max-width: 768px) 100vw, 600px"
+              style={{ objectFit: 'cover' }}
+              unoptimized
+              priority
             />
           </div>
           <div

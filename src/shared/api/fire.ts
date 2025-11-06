@@ -11,9 +11,27 @@ export const FireIncidentSchema = z.object({
 
 export type FireIncident = z.infer<typeof FireIncidentSchema>;
 
-const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let cachedClient: ReturnType<typeof createClient> | null = null;
+
+function getSupabaseClient() {
+  if (cachedClient) {
+    return cachedClient;
+  }
+
+  if (!SUPABASE_URL) {
+    throw new Error('Supabase URL is not configured.');
+  }
+
+  if (!SUPABASE_ANON_KEY) {
+    throw new Error('Supabase anon key is not configured.');
+  }
+
+  cachedClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return cachedClient;
+}
 
 export async function getFireIncidents(): Promise<FireIncident[]> {
+  const client = getSupabaseClient();
   const { data, error } = await client
     .from('fire_incidents')
     .select('*')
@@ -32,6 +50,7 @@ export async function getFireIncidents(): Promise<FireIncident[]> {
 }
 
 export async function getLastFire(): Promise<FireIncident | null> {
+  const client = getSupabaseClient();
   const { data, error } = await client
     .from('fire_incidents')
     .select('*')
@@ -58,6 +77,7 @@ export const FireStatsSchema = z.object({
 export type FireStats = z.infer<typeof FireStatsSchema>;
 
 export async function getFireStats(): Promise<FireStats> {
+  const client = getSupabaseClient();
   const now = new Date();
   const startOfMonth = new Date(
     now.getFullYear(),
