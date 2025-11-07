@@ -149,11 +149,14 @@ export default function HomePage() {
   const contentStyle = {
     flex: '1 1 100%',
     minWidth: '280px',
-    padding: '4.5rem 1.5rem 2rem',
+    padding: '4.5rem 1.5rem',
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center',
+    justifyContent: 'center',
     gap: '2rem',
+    minHeight: '100vh',
+    boxSizing: 'border-box' as const,
     position: 'relative' as const,
     zIndex: 2,
   } as const;
