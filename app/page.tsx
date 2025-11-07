@@ -92,7 +92,11 @@ export default function HomePage() {
   const seconds = Math.floor((diffMs / 1000) % 60);
 
   const labelStyle = {
-    display: 'inline-block',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center' as const,
+    margin: '0 auto',
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     color: '#fff',
     padding: '0.25rem 0.5rem',
@@ -116,15 +120,6 @@ export default function HomePage() {
     position: 'absolute' as const,
     inset: 0,
     zIndex: 0,
-    pointerEvents: 'none' as const,
-  } as const;
-
-  const backgroundScrimStyle = {
-    position: 'absolute' as const,
-    inset: 0,
-    background:
-      'linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.85) 60%, rgba(0,0,0,0.95) 100%)',
-    zIndex: 1,
     pointerEvents: 'none' as const,
   } as const;
 
@@ -230,10 +225,9 @@ export default function HomePage() {
           fill
           priority
           sizes="100vw"
-          style={{ objectFit: 'cover', filter: 'brightness(0.9)' }}
+          style={{ objectFit: 'cover' }}
           unoptimized
         />
-        <div style={backgroundScrimStyle} />
       </div>
       <button
         type="button"
