@@ -4,7 +4,7 @@ Skeleton for a Telegram bot that will poll RSS and request approval before writi
 
 ## Requirements
 
-- .NET 10 preview
+- .NET 8 (LTS)
 - Telegram bot token and chat ID
 - RSS feed URL
 - Supabase URL and service role key
