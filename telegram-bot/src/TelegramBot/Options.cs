@@ -11,6 +11,8 @@ public sealed class RssOptions
 {
     public const string SectionName = "Rss";
     public string FeedUrl { get; init; } = string.Empty;
+    public string[] Keywords { get; init; } = [];
+    public string[] CityKeywords { get; init; } = [];
 }
 
 public sealed class SupabaseOptions

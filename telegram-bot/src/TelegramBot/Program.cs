@@ -15,6 +15,8 @@ builder.Services.Configure<SupabaseOptions>(
 builder.Services.Configure<PollingOptions>(
     builder.Configuration.GetSection(PollingOptions.SectionName));
 
+builder.Services.AddHttpClient<RssFeedService>();
+
 builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();
