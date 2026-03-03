@@ -215,6 +215,36 @@ function injectAnimations() {
       0%, 100% { opacity: 1; }
       50%       { opacity: 0.7; }
     }
+    @keyframes pulse-glow-multi {
+      0%, 100% {
+        text-shadow:
+          0 0 30px rgba(255,59,48,1),
+          0 0 90px rgba(255,59,48,0.85),
+          0 0 180px rgba(255,59,48,0.55);
+        opacity: 1;
+      }
+      20% {
+        text-shadow:
+          0 0 10px rgba(255,59,48,0.8),
+          0 0 40px rgba(255,59,48,0.6),
+          0 0 90px rgba(255,59,48,0.35);
+        opacity: 0.8;
+      }
+      50% {
+        text-shadow:
+          0 0 60px rgba(255,107,53,1),
+          0 0 140px rgba(255,59,48,0.95),
+          0 0 260px rgba(255,59,48,0.6);
+        opacity: 0.94;
+      }
+      75% {
+        text-shadow:
+          0 0 20px rgba(255,59,48,0.9),
+          0 0 60px rgba(255,59,48,0.65),
+          0 0 120px rgba(255,59,48,0.4);
+        opacity: 0.85;
+      }
+    }
     @keyframes bar-grow {
       from { transform: scaleY(0); }
       to   { transform: scaleY(1); }
@@ -228,6 +258,7 @@ function injectAnimations() {
       @keyframes fade-up          { from {} to {} }
       @keyframes shimmer-digit    { from {} to {} }
       @keyframes status-bar-pulse { from {} to {} }
+      @keyframes pulse-glow-multi { from {} to {} }
       @keyframes bar-grow         { from {} to {} }
       @keyframes chart-reveal     { from {} to {} }
     }
@@ -516,7 +547,6 @@ export default function HomePage() {
     null,
   );
   const [isSidebarOpen, setSidebarOpen] = useState(false);
-  const [statsHovered, setStatsHovered] = useState(false);
 
   // Inject keyframe animations once on mount
   useEffect(() => {
@@ -633,6 +663,13 @@ export default function HomePage() {
 
   const lastDate = new Date(latestIncident.datetime);
   const isToday = lastDate.toDateString() === now.toDateString();
+  const todayIncidents = isToday
+    ? incidents.filter(
+        (i) => new Date(i.datetime).toDateString() === now.toDateString(),
+      )
+    : [];
+  const todayCount = todayIncidents.length;
+  const isMultipleToday = todayCount > 1;
   const diffMs = now.getTime() - lastDate.getTime();
   const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
   const hours = Math.floor((diffMs / (1000 * 60 * 60)) % 24);
@@ -675,53 +712,56 @@ export default function HomePage() {
     inset: 0,
     zIndex: 1,
     pointerEvents: 'none',
-    background: isToday
+    background: isMultipleToday
       ? `
+          linear-gradient(to top, rgba(0,0,0,0.98) 0%, rgba(6,0,0,0.80) 40%, rgba(38,2,2,0.65) 70%, rgba(60,4,4,0.88) 100%),
+          linear-gradient(to bottom, rgba(120,0,0,0.72) 0%, transparent 45%),
+          linear-gradient(160deg, rgba(180,0,0,0.10) 0%, transparent 55%)
+        `
+      : isToday
+        ? `
           linear-gradient(to top, rgba(0,0,0,0.97) 0%, rgba(0,0,0,0.65) 40%, rgba(20,4,4,0.5) 70%, rgba(30,6,6,0.72) 100%),
           linear-gradient(to bottom, rgba(60,0,0,0.55) 0%, transparent 50%)
         `
-      : `
+        : `
           linear-gradient(to top, rgba(0,0,0,0.97) 0%, rgba(0,0,0,0.62) 40%, rgba(4,10,14,0.45) 70%, rgba(6,12,18,0.68) 100%),
           linear-gradient(to bottom, rgba(0,20,40,0.45) 0%, transparent 50%)
         `,
   };
 
-  // Sidebar toggle button
+  // Sidebar toggle button — lives inside the header now
   const toggleBtnStyle: CSSProperties = {
-    position: 'fixed',
-    top: '16px',
-    left: '16px',
-    zIndex: 1100,
-    width: '44px',
-    height: '44px',
-    borderRadius: '12px',
+    width: '36px',
+    height: '36px',
+    borderRadius: '10px',
     border: `1px solid ${token.borderMid}`,
-    backgroundColor: token.glassDark,
-    backdropFilter: 'blur(16px)',
-    WebkitBackdropFilter: 'blur(16px)',
+    backgroundColor: token.glassLight,
     color: token.white,
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: token.shadowSm,
-    transition: 'background-color 0.2s, border-color 0.2s, box-shadow 0.2s',
+    flexShrink: 0,
+    transition: 'background-color 0.2s, border-color 0.2s',
   };
 
-  // Dark overlay behind sidebar
+  // Dark overlay behind sidebar (starts below the header)
   const backdropStyle: CSSProperties = {
     position: 'fixed',
-    inset: 0,
+    top: '56px',
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.55)',
     zIndex: 900,
     backdropFilter: 'blur(2px)',
     WebkitBackdropFilter: 'blur(2px)',
   };
 
-  // Sidebar — glassmorphism panel
+  // Sidebar — glassmorphism panel (starts below the header)
   const sidebarStyle: CSSProperties = {
     position: 'fixed',
-    top: 0,
+    top: '56px',
     left: 0,
     bottom: 0,
     width: 'min(88vw, 360px)',
@@ -811,7 +851,9 @@ export default function HomePage() {
     margin: 0,
     letterSpacing: '-0.04em',
     color: token.red,
-    animation: 'pulse-glow-red 2s ease-in-out infinite',
+    animation: isMultipleToday
+      ? 'pulse-glow-multi 0.9s ease-in-out infinite'
+      : 'pulse-glow-red 2s ease-in-out infinite',
     textAlign: 'center',
   };
 
@@ -999,18 +1041,18 @@ export default function HomePage() {
     gap: '4px',
   };
 
-  // Status bar — top fixed strip
+  // Status bar — top fixed strip (zIndex above sidebar so button is always reachable)
   const statusBarStyle: CSSProperties = {
     position: 'fixed',
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 50,
+    zIndex: 1100,
     height: '56px',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '0 16px 0 72px',
+    gap: '12px',
+    padding: '0 16px',
     backgroundColor: 'rgba(6,6,9,0.75)',
     backdropFilter: 'blur(20px)',
     WebkitBackdropFilter: 'blur(20px)',
@@ -1036,6 +1078,7 @@ export default function HomePage() {
     textTransform: 'uppercase',
     color: token.gray400,
     fontFamily: token.fontSystem,
+    flex: 1,
   };
 
   const statusBadgeStyle: CSSProperties = {
@@ -1048,10 +1091,19 @@ export default function HomePage() {
     fontWeight: 700,
     letterSpacing: '0.1em',
     textTransform: 'uppercase',
-    backgroundColor: isToday ? 'rgba(255,59,48,0.18)' : 'rgba(48,209,88,0.14)',
-    border: `1px solid ${isToday ? 'rgba(255,59,48,0.35)' : 'rgba(48,209,88,0.3)'}`,
+    backgroundColor: isMultipleToday
+      ? 'rgba(255,59,48,0.30)'
+      : isToday
+        ? 'rgba(255,59,48,0.18)'
+        : 'rgba(48,209,88,0.14)',
+    border: `1px solid ${isMultipleToday ? 'rgba(255,59,48,0.65)' : isToday ? 'rgba(255,59,48,0.35)' : 'rgba(48,209,88,0.3)'}`,
     color: isToday ? '#ff8a80' : '#69f0ae',
-    animation: isToday ? 'status-bar-pulse 2s ease-in-out infinite' : 'none',
+    boxShadow: isMultipleToday ? '0 0 12px rgba(255,59,48,0.35)' : 'none',
+    animation: isMultipleToday
+      ? 'status-bar-pulse 0.8s ease-in-out infinite'
+      : isToday
+        ? 'status-bar-pulse 2s ease-in-out infinite'
+        : 'none',
   };
 
   const statusDotStyle: CSSProperties = {
@@ -1086,24 +1138,28 @@ export default function HomePage() {
       {/* ── Top status bar ── */}
       <header style={statusBarStyle} role="banner">
         <div style={statusBarAccentStyle} aria-hidden />
+        <button
+          type="button"
+          onClick={() => setSidebarOpen((o) => !o)}
+          aria-label={
+            isSidebarOpen ? 'Hide incident list' : 'Show incident list'
+          }
+          aria-expanded={isSidebarOpen}
+          aria-controls="incident-sidebar"
+          style={toggleBtnStyle}
+        >
+          <MenuIcon />
+        </button>
         <span style={statusBarTitleStyle}>is.chisinau.onfire</span>
         <div style={statusBadgeStyle}>
           <span style={statusDotStyle} aria-hidden />
-          {isToday ? 'Fire today' : 'No fire today'}
+          {isMultipleToday
+            ? `${todayCount} fires today`
+            : isToday
+              ? 'Fire today'
+              : 'No fire today'}
         </div>
       </header>
-
-      {/* ── Sidebar toggle ── */}
-      <button
-        type="button"
-        onClick={() => setSidebarOpen((o) => !o)}
-        aria-label={isSidebarOpen ? 'Hide incident list' : 'Show incident list'}
-        aria-expanded={isSidebarOpen}
-        aria-controls="incident-sidebar"
-        style={toggleBtnStyle}
-      >
-        <MenuIcon />
-      </button>
 
       {/* ── Backdrop overlay ── */}
       {isSidebarOpen && (
@@ -1280,16 +1336,68 @@ export default function HomePage() {
           <div style={statusTopRowStyle}>
             <p style={siteTitleStyle}>Chișinău, Moldova</p>
             <p style={questionStyle}>
-              {isToday
-                ? 'There is a fire today at'
-                : 'Days since the last fire in Chișinău'}
+              {isMultipleToday
+                ? `${todayCount} simultaneous fires in Chișinău`
+                : isToday
+                  ? 'There is a fire today at'
+                  : 'Days since the last fire in Chișinău'}
             </p>
           </div>
 
           {isToday ? (
             <>
               <h1 style={yesHeadingStyle}>YES</h1>
-              <LocationPill street={latestIncident.street} isAlert />
+
+              {isMultipleToday && (
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '7px 18px',
+                    borderRadius: '9999px',
+                    backgroundColor: 'rgba(255,59,48,0.18)',
+                    border: '1px solid rgba(255,59,48,0.5)',
+                    color: '#ff8a80',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.14em',
+                    textTransform: 'uppercase',
+                    boxShadow: '0 0 24px rgba(255,59,48,0.28)',
+                    animation: 'status-bar-pulse 1.1s ease-in-out infinite',
+                    fontFamily: token.fontSystem,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: '7px',
+                      height: '7px',
+                      borderRadius: '50%',
+                      backgroundColor: token.red,
+                      boxShadow: `0 0 8px ${token.red}`,
+                      flexShrink: 0,
+                    }}
+                    aria-hidden
+                  />
+                  {todayCount} active fires right now
+                </div>
+              )}
+
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                  justifyContent: 'center',
+                  maxWidth: '520px',
+                }}
+              >
+                {(isMultipleToday ? todayIncidents : [latestIncident]).map(
+                  (i) => (
+                    <LocationPill key={i.id} street={i.street} isAlert />
+                  ),
+                )}
+              </div>
             </>
           ) : (
             <>
@@ -1347,7 +1455,7 @@ export default function HomePage() {
         </article>
       </section>
 
-      {/* ── Stats pill (bottom-right) ── */}
+      {/* ── Stats panel (bottom-right) ── */}
       {stats && (
         <div
           style={{
@@ -1355,27 +1463,21 @@ export default function HomePage() {
             bottom: '16px',
             right: '16px',
             zIndex: 10,
-            cursor: 'default',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            gap: '8px',
           }}
-          onMouseEnter={() => setStatsHovered(true)}
-          onMouseLeave={() => setStatsHovered(false)}
         >
-          {/* Monthly chart popover */}
-          {statsHovered && monthlyData && (
-            <div
-              style={{
-                position: 'absolute',
-                bottom: 'calc(100% + 10px)',
-                right: 0,
-              }}
-            >
-              <MonthlyBarChart
-                data={monthlyData}
-                currentMonth={now.getMonth() + 1}
-              />
-            </div>
+          {/* Monthly bar chart — always visible */}
+          {monthlyData && (
+            <MonthlyBarChart
+              data={monthlyData}
+              currentMonth={now.getMonth() + 1}
+            />
           )}
 
+          {/* Stats pill */}
           <div style={statsPillStyle} data-testid="stats">
             <span style={statsIconWrapStyle}>
               <FlameIcon />
