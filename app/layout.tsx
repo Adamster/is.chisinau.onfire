@@ -1,14 +1,60 @@
+import { cache } from 'react';
+import type { Metadata } from 'next';
 import Providers from './providers';
 import { getLastFire } from '../src/shared/api/fire';
 
 export const dynamic = 'force-dynamic';
+
+// Deduplicate the DB call across generateMetadata + RootLayout
+const fetchLastFire = cache(() => getLastFire().catch(() => null));
+
+export async function generateMetadata(): Promise<Metadata> {
+  const incident = await fetchLastFire();
+  const now = new Date();
+  const isToday = incident
+    ? new Date(incident.datetime).toDateString() === now.toDateString()
+    : false;
+
+  const title = isToday
+    ? '🔥 YES — Fire in Chișinău right now'
+    : '✅ NO — No fire in Chișinău today';
+
+  const description = isToday
+    ? `Active fire incident at ${incident!.street}, Chișinău, Moldova.`
+    : incident
+      ? `No fire today in Chișinău. Last incident was at ${incident.street}.`
+      : 'Real-time fire incident tracker for Chișinău, Moldova.';
+
+  const images = incident?.photo_url
+    ? [{ url: incident.photo_url, width: 1200, height: 630, alt: title }]
+    : [];
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      siteName: 'is.chisinau.onfire',
+      locale: 'en_US',
+      type: 'website',
+      images,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: images.map((i) => i.url),
+    },
+  };
+}
 
 export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const incident = await getLastFire().catch(() => null);
+  const incident = await fetchLastFire();
 
   return (
     <html lang="en">
