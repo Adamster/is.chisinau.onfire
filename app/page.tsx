@@ -547,7 +547,6 @@ export default function HomePage() {
     null,
   );
   const [isSidebarOpen, setSidebarOpen] = useState(false);
-  const [statsHovered, setStatsHovered] = useState(false);
 
   // Inject keyframe animations once on mount
   useEffect(() => {
@@ -730,42 +729,39 @@ export default function HomePage() {
         `,
   };
 
-  // Sidebar toggle button
+  // Sidebar toggle button — lives inside the header now
   const toggleBtnStyle: CSSProperties = {
-    position: 'fixed',
-    top: '16px',
-    left: '16px',
-    zIndex: 1100,
-    width: '44px',
-    height: '44px',
-    borderRadius: '12px',
+    width: '36px',
+    height: '36px',
+    borderRadius: '10px',
     border: `1px solid ${token.borderMid}`,
-    backgroundColor: token.glassDark,
-    backdropFilter: 'blur(16px)',
-    WebkitBackdropFilter: 'blur(16px)',
+    backgroundColor: token.glassLight,
     color: token.white,
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: token.shadowSm,
-    transition: 'background-color 0.2s, border-color 0.2s, box-shadow 0.2s',
+    flexShrink: 0,
+    transition: 'background-color 0.2s, border-color 0.2s',
   };
 
-  // Dark overlay behind sidebar
+  // Dark overlay behind sidebar (starts below the header)
   const backdropStyle: CSSProperties = {
     position: 'fixed',
-    inset: 0,
+    top: '56px',
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.55)',
     zIndex: 900,
     backdropFilter: 'blur(2px)',
     WebkitBackdropFilter: 'blur(2px)',
   };
 
-  // Sidebar — glassmorphism panel
+  // Sidebar — glassmorphism panel (starts below the header)
   const sidebarStyle: CSSProperties = {
     position: 'fixed',
-    top: 0,
+    top: '56px',
     left: 0,
     bottom: 0,
     width: 'min(88vw, 360px)',
@@ -1045,18 +1041,18 @@ export default function HomePage() {
     gap: '4px',
   };
 
-  // Status bar — top fixed strip
+  // Status bar — top fixed strip (zIndex above sidebar so button is always reachable)
   const statusBarStyle: CSSProperties = {
     position: 'fixed',
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 50,
+    zIndex: 1100,
     height: '56px',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '0 16px 0 72px',
+    gap: '12px',
+    padding: '0 16px',
     backgroundColor: 'rgba(6,6,9,0.75)',
     backdropFilter: 'blur(20px)',
     WebkitBackdropFilter: 'blur(20px)',
@@ -1082,6 +1078,7 @@ export default function HomePage() {
     textTransform: 'uppercase',
     color: token.gray400,
     fontFamily: token.fontSystem,
+    flex: 1,
   };
 
   const statusBadgeStyle: CSSProperties = {
@@ -1141,6 +1138,18 @@ export default function HomePage() {
       {/* ── Top status bar ── */}
       <header style={statusBarStyle} role="banner">
         <div style={statusBarAccentStyle} aria-hidden />
+        <button
+          type="button"
+          onClick={() => setSidebarOpen((o) => !o)}
+          aria-label={
+            isSidebarOpen ? 'Hide incident list' : 'Show incident list'
+          }
+          aria-expanded={isSidebarOpen}
+          aria-controls="incident-sidebar"
+          style={toggleBtnStyle}
+        >
+          <MenuIcon />
+        </button>
         <span style={statusBarTitleStyle}>is.chisinau.onfire</span>
         <div style={statusBadgeStyle}>
           <span style={statusDotStyle} aria-hidden />
@@ -1151,18 +1160,6 @@ export default function HomePage() {
               : 'No fire today'}
         </div>
       </header>
-
-      {/* ── Sidebar toggle ── */}
-      <button
-        type="button"
-        onClick={() => setSidebarOpen((o) => !o)}
-        aria-label={isSidebarOpen ? 'Hide incident list' : 'Show incident list'}
-        aria-expanded={isSidebarOpen}
-        aria-controls="incident-sidebar"
-        style={toggleBtnStyle}
-      >
-        <MenuIcon />
-      </button>
 
       {/* ── Backdrop overlay ── */}
       {isSidebarOpen && (
@@ -1458,7 +1455,7 @@ export default function HomePage() {
         </article>
       </section>
 
-      {/* ── Stats pill (bottom-right) ── */}
+      {/* ── Stats panel (bottom-right) ── */}
       {stats && (
         <div
           style={{
@@ -1466,27 +1463,21 @@ export default function HomePage() {
             bottom: '16px',
             right: '16px',
             zIndex: 10,
-            cursor: 'default',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            gap: '8px',
           }}
-          onMouseEnter={() => setStatsHovered(true)}
-          onMouseLeave={() => setStatsHovered(false)}
         >
-          {/* Monthly chart popover */}
-          {statsHovered && monthlyData && (
-            <div
-              style={{
-                position: 'absolute',
-                bottom: 'calc(100% + 10px)',
-                right: 0,
-              }}
-            >
-              <MonthlyBarChart
-                data={monthlyData}
-                currentMonth={now.getMonth() + 1}
-              />
-            </div>
+          {/* Monthly bar chart — always visible */}
+          {monthlyData && (
+            <MonthlyBarChart
+              data={monthlyData}
+              currentMonth={now.getMonth() + 1}
+            />
           )}
 
+          {/* Stats pill */}
           <div style={statsPillStyle} data-testid="stats">
             <span style={statsIconWrapStyle}>
               <FlameIcon />
