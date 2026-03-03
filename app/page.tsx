@@ -4,7 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 import {
   getFireIncidents,
   getFireStats,
+  getFireIncidentsByMonth,
   type FireIncident,
+  type FireMonthlyStats,
 } from '../src/shared/api/fire';
 import Image from 'next/image';
 
@@ -54,29 +56,92 @@ const token = {
 // Tiny reusable SVG icons (inline, no external dependency)
 // ---------------------------------------------------------------------------
 const MenuIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-    <rect x="2" y="4.5" width="16" height="1.75" rx="0.875" fill="currentColor" />
-    <rect x="2" y="9.125" width="16" height="1.75" rx="0.875" fill="currentColor" />
-    <rect x="2" y="13.75" width="16" height="1.75" rx="0.875" fill="currentColor" />
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 20 20"
+    fill="none"
+    aria-hidden="true"
+  >
+    <rect
+      x="2"
+      y="4.5"
+      width="16"
+      height="1.75"
+      rx="0.875"
+      fill="currentColor"
+    />
+    <rect
+      x="2"
+      y="9.125"
+      width="16"
+      height="1.75"
+      rx="0.875"
+      fill="currentColor"
+    />
+    <rect
+      x="2"
+      y="13.75"
+      width="16"
+      height="1.75"
+      rx="0.875"
+      fill="currentColor"
+    />
   </svg>
 );
 
 const CloseIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-    <path d="M2 2L16 16M16 2L2 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 18 18"
+    fill="none"
+    aria-hidden="true"
+  >
+    <path
+      d="M2 2L16 16M16 2L2 16"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
   </svg>
 );
 
 const CalendarIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-    <rect x="1" y="2.5" width="12" height="10.5" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
-    <path d="M4.5 1V4M9.5 1V4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 14 14"
+    fill="none"
+    aria-hidden="true"
+  >
+    <rect
+      x="1"
+      y="2.5"
+      width="12"
+      height="10.5"
+      rx="1.5"
+      stroke="currentColor"
+      strokeWidth="1.25"
+    />
+    <path
+      d="M4.5 1V4M9.5 1V4"
+      stroke="currentColor"
+      strokeWidth="1.25"
+      strokeLinecap="round"
+    />
     <path d="M1 5.5H13" stroke="currentColor" strokeWidth="1.25" />
   </svg>
 );
 
 const PinIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 14 14"
+    fill="none"
+    aria-hidden="true"
+  >
     <path
       d="M7 1C4.79 1 3 2.79 3 5c0 3.25 4 8 4 8s4-4.75 4-8c0-2.21-1.79-4-4-4z"
       stroke="currentColor"
@@ -88,7 +153,13 @@ const PinIcon = () => (
 );
 
 const FlameIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+  <svg
+    width="12"
+    height="12"
+    viewBox="0 0 12 12"
+    fill="none"
+    aria-hidden="true"
+  >
     <path
       d="M6 1C6 1 8.5 3.5 8.5 5.5C8.5 6.2 8.1 6.9 7.5 7.3C7.7 6.8 7.5 6.2 7 5.9C6.5 5.6 6 5 6 4C6 4 4.5 5.5 4.5 6.5C4.5 7.5 5.17 8.5 6 8.5C7.38 8.5 8.5 7.38 8.5 6C8.5 4 6 1 6 1Z"
       fill="currentColor"
@@ -144,11 +215,21 @@ function injectAnimations() {
       0%, 100% { opacity: 1; }
       50%       { opacity: 0.7; }
     }
+    @keyframes bar-grow {
+      from { transform: scaleY(0); }
+      to   { transform: scaleY(1); }
+    }
+    @keyframes chart-reveal {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
     @media (prefers-reduced-motion: reduce) {
       @keyframes pulse-glow-red  { from {} to {} }
       @keyframes fade-up          { from {} to {} }
       @keyframes shimmer-digit    { from {} to {} }
       @keyframes status-bar-pulse { from {} to {} }
+      @keyframes bar-grow         { from {} to {} }
+      @keyframes chart-reveal     { from {} to {} }
     }
   `;
   document.head.appendChild(style);
@@ -159,13 +240,7 @@ function injectAnimations() {
 // ---------------------------------------------------------------------------
 
 /** Monospace countdown unit chip */
-function CountdownChip({
-  value,
-  label,
-}: {
-  value: number;
-  label: string;
-}) {
+function CountdownChip({ value, label }: { value: number; label: string }) {
   const chipStyle: CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
@@ -253,6 +328,174 @@ function LocationPill({
 }
 
 // ---------------------------------------------------------------------------
+// Monthly bar chart (shown on stats pill hover)
+// ---------------------------------------------------------------------------
+const MONTH_ABBR = [
+  'J',
+  'F',
+  'M',
+  'A',
+  'M',
+  'J',
+  'J',
+  'A',
+  'S',
+  'O',
+  'N',
+  'D',
+] as const;
+const BAR_W = 14;
+const BAR_GAP = 6;
+const CHART_H = 72;
+const CHART_W = 12 * BAR_W + 11 * BAR_GAP; // 234px
+
+function MonthlyBarChart({
+  data,
+  currentMonth,
+}: {
+  data: FireMonthlyStats;
+  currentMonth: number; // 1-based
+}) {
+  const maxCount = Math.max(...data.map((d) => d.count), 1);
+
+  const wrapStyle: CSSProperties = {
+    width: `${CHART_W + 28}px`,
+    padding: '14px 14px 10px',
+    backgroundColor: 'rgba(8,8,12,0.94)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+    border: `1px solid ${token.borderMid}`,
+    borderRadius: '14px',
+    boxShadow: '0 12px 40px rgba(0,0,0,0.75)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    animation: 'chart-reveal 0.22s ease-out both',
+  };
+
+  return (
+    <div style={wrapStyle}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <p
+          style={{
+            margin: 0,
+            fontSize: '0.65rem',
+            fontWeight: 700,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            color: token.gray400,
+            fontFamily: token.fontSystem,
+          }}
+        >
+          Monthly incidents
+        </p>
+        <span
+          style={{
+            fontSize: '0.65rem',
+            fontWeight: 600,
+            color: token.gray400,
+            fontFamily: token.fontMono,
+            letterSpacing: '0.06em',
+          }}
+        >
+          {new Date().getFullYear()}
+        </span>
+      </div>
+
+      <svg
+        width={CHART_W}
+        height={CHART_H + 18}
+        style={{ overflow: 'visible' }}
+      >
+        {/* Baseline */}
+        <line
+          x1={0}
+          y1={CHART_H}
+          x2={CHART_W}
+          y2={CHART_H}
+          stroke={token.borderSubtle}
+          strokeWidth={1}
+        />
+
+        {data.map((d, i) => {
+          const barH =
+            d.count === 0
+              ? 0
+              : Math.max(Math.round((d.count / maxCount) * CHART_H), 4);
+          const x = i * (BAR_W + BAR_GAP);
+          const y = CHART_H - barH;
+          const isCurrent = d.month === currentMonth;
+          const isFuture = d.month > currentMonth;
+
+          const barFill = isCurrent
+            ? token.red
+            : isFuture
+              ? token.gray800
+              : token.gray400;
+
+          return (
+            <g key={d.month}>
+              {/* Bar */}
+              <rect
+                x={x}
+                y={barH === 0 ? CHART_H - 1 : y}
+                width={BAR_W}
+                height={barH === 0 ? 1 : barH}
+                rx={barH > 6 ? 3 : 1}
+                fill={barFill}
+                opacity={isFuture ? 0.3 : 1}
+                style={{
+                  transformBox: 'fill-box' as CSSProperties['transformBox'],
+                  transformOrigin: 'center bottom',
+                  animation: `bar-grow 0.38s ease-out ${i * 0.025}s both`,
+                }}
+              />
+
+              {/* Count label above bar */}
+              {d.count > 0 && (
+                <text
+                  x={x + BAR_W / 2}
+                  y={y - 4}
+                  textAnchor="middle"
+                  fill={isCurrent ? token.white : token.gray400}
+                  fontSize="9"
+                  fontWeight={isCurrent ? 700 : 500}
+                  fontFamily={token.fontMono}
+                  style={{
+                    animation: `fade-up 0.3s ease-out ${i * 0.025 + 0.15}s both`,
+                  }}
+                >
+                  {d.count}
+                </text>
+              )}
+
+              {/* Month label */}
+              <text
+                x={x + BAR_W / 2}
+                y={CHART_H + 13}
+                textAnchor="middle"
+                fill={isCurrent ? token.white : token.gray400}
+                fontSize="9"
+                fontWeight={isCurrent ? 700 : 400}
+                fontFamily={token.fontSystem}
+              >
+                {MONTH_ABBR[i]}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 export default function HomePage() {
@@ -264,9 +507,16 @@ export default function HomePage() {
     queryKey: ['fireStats'],
     queryFn: getFireStats,
   });
+  const { data: monthlyData } = useQuery({
+    queryKey: ['fireMonthlyStats'],
+    queryFn: getFireIncidentsByMonth,
+  });
   const [now, setNow] = useState(new Date());
-  const [selectedIncidentId, setSelectedIncidentId] = useState<number | null>(null);
+  const [selectedIncidentId, setSelectedIncidentId] = useState<number | null>(
+    null,
+  );
   const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const [statsHovered, setStatsHovered] = useState(false);
 
   // Inject keyframe animations once on mount
   useEffect(() => {
@@ -330,7 +580,13 @@ export default function HomePage() {
             backgroundSize: '400% 100%',
           }}
         />
-        <span style={{ fontSize: '0.8rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+        <span
+          style={{
+            fontSize: '0.8rem',
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+          }}
+        >
           Loading incidents&hellip;
         </span>
       </main>
@@ -358,8 +614,12 @@ export default function HomePage() {
         }}
       >
         <FlameIcon />
-        <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 500 }}>No fire incidents recorded.</p>
-        <p style={{ margin: 0, fontSize: '0.85rem', color: token.gray400 }}>Check back later.</p>
+        <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 500 }}>
+          No fire incidents recorded.
+        </p>
+        <p style={{ margin: 0, fontSize: '0.85rem', color: token.gray400 }}>
+          Check back later.
+        </p>
       </main>
     );
   }
@@ -379,7 +639,9 @@ export default function HomePage() {
   const minutes = Math.floor((diffMs / (1000 * 60)) % 60);
   const seconds = Math.floor((diffMs / 1000) % 60);
 
-  const formattedSelectedDate = new Date(selectedIncident.datetime).toLocaleString(undefined, {
+  const formattedSelectedDate = new Date(
+    selectedIncident.datetime,
+  ).toLocaleString(undefined, {
     dateStyle: 'full',
     timeStyle: 'short',
   });
@@ -516,7 +778,8 @@ export default function HomePage() {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 'clamp(80px, 12vh, 120px) clamp(20px, 5vw, 64px) clamp(80px, 10vh, 100px)',
+    padding:
+      'clamp(80px, 12vh, 120px) clamp(20px, 5vw, 64px) clamp(80px, 10vh, 100px)',
     gap: 'clamp(32px, 5vh, 56px)',
     boxSizing: 'border-box',
   };
@@ -687,12 +950,8 @@ export default function HomePage() {
     wordBreak: 'break-word' as const,
   };
 
-  // Stats pill — bottom right
+  // Stats pill — bottom right (positioning handled by wrapper)
   const statsPillStyle: CSSProperties = {
-    position: 'fixed',
-    bottom: '16px',
-    right: '16px',
-    zIndex: 10,
     display: 'inline-flex',
     alignItems: 'center',
     gap: '6px',
@@ -883,7 +1142,8 @@ export default function HomePage() {
                 letterSpacing: '0.04em',
               }}
             >
-              {incidents.length} recorded incident{incidents.length !== 1 ? 's' : ''}
+              {incidents.length} recorded incident
+              {incidents.length !== 1 ? 's' : ''}
             </p>
           </div>
           <button
@@ -919,7 +1179,16 @@ export default function HomePage() {
           >
             Select to view
           </p>
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <ul
+            style={{
+              listStyle: 'none',
+              margin: 0,
+              padding: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+            }}
+          >
             {incidents.map((incident) => {
               const isActive = incident.id === selectedIncident.id;
               return (
@@ -965,12 +1234,15 @@ export default function HomePage() {
                           aria-hidden
                         />
                       )}
-                      {new Date(incident.datetime).toLocaleDateString(undefined, {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}
+                      {new Date(incident.datetime).toLocaleDateString(
+                        undefined,
+                        {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        },
+                      )}
                     </span>
                     <span
                       style={{
@@ -996,11 +1268,21 @@ export default function HomePage() {
       {/* ── Main content ── */}
       <section style={mainSectionStyle}>
         {/* Status block */}
-        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+        <div
+          style={{
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '16px',
+          }}
+        >
           <div style={statusTopRowStyle}>
             <p style={siteTitleStyle}>Chișinău, Moldova</p>
             <p style={questionStyle}>
-              {isToday ? 'There is a fire today at' : 'Days since the last fire in Chișinău'}
+              {isToday
+                ? 'There is a fire today at'
+                : 'Days since the last fire in Chișinău'}
             </p>
           </div>
 
@@ -1067,17 +1349,45 @@ export default function HomePage() {
 
       {/* ── Stats pill (bottom-right) ── */}
       {stats && (
-        <div style={statsPillStyle} data-testid="stats">
-          <span style={statsIconWrapStyle}>
-            <FlameIcon />
-          </span>
-          <span>
-            <span style={{ color: token.white }}>{stats.month}</span>
-            <span style={{ color: token.gray400 }}> this month</span>
-            <span style={{ color: token.borderMid, margin: '0 6px' }}>/</span>
-            <span style={{ color: token.white }}>{stats.year}</span>
-            <span style={{ color: token.gray400 }}> this year</span>
-          </span>
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '16px',
+            right: '16px',
+            zIndex: 10,
+            cursor: 'default',
+          }}
+          onMouseEnter={() => setStatsHovered(true)}
+          onMouseLeave={() => setStatsHovered(false)}
+        >
+          {/* Monthly chart popover */}
+          {statsHovered && monthlyData && (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 'calc(100% + 10px)',
+                right: 0,
+              }}
+            >
+              <MonthlyBarChart
+                data={monthlyData}
+                currentMonth={now.getMonth() + 1}
+              />
+            </div>
+          )}
+
+          <div style={statsPillStyle} data-testid="stats">
+            <span style={statsIconWrapStyle}>
+              <FlameIcon />
+            </span>
+            <span>
+              <span style={{ color: token.white }}>{stats.month}</span>
+              <span style={{ color: token.gray400 }}> this month</span>
+              <span style={{ color: token.borderMid, margin: '0 6px' }}>/</span>
+              <span style={{ color: token.white }}>{stats.year}</span>
+              <span style={{ color: token.gray400 }}> this year</span>
+            </span>
+          </div>
         </div>
       )}
     </main>

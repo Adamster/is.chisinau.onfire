@@ -69,6 +69,35 @@ export async function getLastFire(): Promise<FireIncident | null> {
   return parsed.data[0] ?? null;
 }
 
+export const FireMonthlyStatsSchema = z.array(
+  z.object({ month: z.number().min(1).max(12), count: z.number().min(0) }),
+);
+export type FireMonthlyStats = z.infer<typeof FireMonthlyStatsSchema>;
+
+export async function getFireIncidentsByMonth(): Promise<FireMonthlyStats> {
+  const client = getSupabaseClient();
+  const now = new Date();
+  const startOfYear = new Date(now.getFullYear(), 0, 1).toISOString();
+
+  const { data, error } = await client
+    .from('fire_incidents')
+    .select('*')
+    .gte('datetime', startOfYear);
+
+  if (error) throw error;
+
+  const parsed = z.array(FireIncidentSchema).parse(data ?? []);
+  const counts = Array.from({ length: 12 }, (_, i) => ({
+    month: i + 1,
+    count: 0,
+  }));
+  for (const incident of parsed) {
+    const m = new Date(incident.datetime).getMonth();
+    counts[m].count++;
+  }
+  return FireMonthlyStatsSchema.parse(counts);
+}
+
 export const FireStatsSchema = z.object({
   month: z.number(),
   year: z.number(),
