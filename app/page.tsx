@@ -215,6 +215,36 @@ function injectAnimations() {
       0%, 100% { opacity: 1; }
       50%       { opacity: 0.7; }
     }
+    @keyframes pulse-glow-multi {
+      0%, 100% {
+        text-shadow:
+          0 0 30px rgba(255,59,48,1),
+          0 0 90px rgba(255,59,48,0.85),
+          0 0 180px rgba(255,59,48,0.55);
+        opacity: 1;
+      }
+      20% {
+        text-shadow:
+          0 0 10px rgba(255,59,48,0.8),
+          0 0 40px rgba(255,59,48,0.6),
+          0 0 90px rgba(255,59,48,0.35);
+        opacity: 0.8;
+      }
+      50% {
+        text-shadow:
+          0 0 60px rgba(255,107,53,1),
+          0 0 140px rgba(255,59,48,0.95),
+          0 0 260px rgba(255,59,48,0.6);
+        opacity: 0.94;
+      }
+      75% {
+        text-shadow:
+          0 0 20px rgba(255,59,48,0.9),
+          0 0 60px rgba(255,59,48,0.65),
+          0 0 120px rgba(255,59,48,0.4);
+        opacity: 0.85;
+      }
+    }
     @keyframes bar-grow {
       from { transform: scaleY(0); }
       to   { transform: scaleY(1); }
@@ -228,6 +258,7 @@ function injectAnimations() {
       @keyframes fade-up          { from {} to {} }
       @keyframes shimmer-digit    { from {} to {} }
       @keyframes status-bar-pulse { from {} to {} }
+      @keyframes pulse-glow-multi { from {} to {} }
       @keyframes bar-grow         { from {} to {} }
       @keyframes chart-reveal     { from {} to {} }
     }
@@ -633,6 +664,13 @@ export default function HomePage() {
 
   const lastDate = new Date(latestIncident.datetime);
   const isToday = lastDate.toDateString() === now.toDateString();
+  const todayIncidents = isToday
+    ? incidents.filter(
+        (i) => new Date(i.datetime).toDateString() === now.toDateString(),
+      )
+    : [];
+  const todayCount = todayIncidents.length;
+  const isMultipleToday = todayCount > 1;
   const diffMs = now.getTime() - lastDate.getTime();
   const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
   const hours = Math.floor((diffMs / (1000 * 60 * 60)) % 24);
@@ -675,12 +713,18 @@ export default function HomePage() {
     inset: 0,
     zIndex: 1,
     pointerEvents: 'none',
-    background: isToday
+    background: isMultipleToday
       ? `
+          linear-gradient(to top, rgba(0,0,0,0.98) 0%, rgba(6,0,0,0.80) 40%, rgba(38,2,2,0.65) 70%, rgba(60,4,4,0.88) 100%),
+          linear-gradient(to bottom, rgba(120,0,0,0.72) 0%, transparent 45%),
+          linear-gradient(160deg, rgba(180,0,0,0.10) 0%, transparent 55%)
+        `
+      : isToday
+        ? `
           linear-gradient(to top, rgba(0,0,0,0.97) 0%, rgba(0,0,0,0.65) 40%, rgba(20,4,4,0.5) 70%, rgba(30,6,6,0.72) 100%),
           linear-gradient(to bottom, rgba(60,0,0,0.55) 0%, transparent 50%)
         `
-      : `
+        : `
           linear-gradient(to top, rgba(0,0,0,0.97) 0%, rgba(0,0,0,0.62) 40%, rgba(4,10,14,0.45) 70%, rgba(6,12,18,0.68) 100%),
           linear-gradient(to bottom, rgba(0,20,40,0.45) 0%, transparent 50%)
         `,
@@ -811,7 +855,9 @@ export default function HomePage() {
     margin: 0,
     letterSpacing: '-0.04em',
     color: token.red,
-    animation: 'pulse-glow-red 2s ease-in-out infinite',
+    animation: isMultipleToday
+      ? 'pulse-glow-multi 0.9s ease-in-out infinite'
+      : 'pulse-glow-red 2s ease-in-out infinite',
     textAlign: 'center',
   };
 
@@ -1048,10 +1094,19 @@ export default function HomePage() {
     fontWeight: 700,
     letterSpacing: '0.1em',
     textTransform: 'uppercase',
-    backgroundColor: isToday ? 'rgba(255,59,48,0.18)' : 'rgba(48,209,88,0.14)',
-    border: `1px solid ${isToday ? 'rgba(255,59,48,0.35)' : 'rgba(48,209,88,0.3)'}`,
+    backgroundColor: isMultipleToday
+      ? 'rgba(255,59,48,0.30)'
+      : isToday
+        ? 'rgba(255,59,48,0.18)'
+        : 'rgba(48,209,88,0.14)',
+    border: `1px solid ${isMultipleToday ? 'rgba(255,59,48,0.65)' : isToday ? 'rgba(255,59,48,0.35)' : 'rgba(48,209,88,0.3)'}`,
     color: isToday ? '#ff8a80' : '#69f0ae',
-    animation: isToday ? 'status-bar-pulse 2s ease-in-out infinite' : 'none',
+    boxShadow: isMultipleToday ? '0 0 12px rgba(255,59,48,0.35)' : 'none',
+    animation: isMultipleToday
+      ? 'status-bar-pulse 0.8s ease-in-out infinite'
+      : isToday
+        ? 'status-bar-pulse 2s ease-in-out infinite'
+        : 'none',
   };
 
   const statusDotStyle: CSSProperties = {
@@ -1089,7 +1144,11 @@ export default function HomePage() {
         <span style={statusBarTitleStyle}>is.chisinau.onfire</span>
         <div style={statusBadgeStyle}>
           <span style={statusDotStyle} aria-hidden />
-          {isToday ? 'Fire today' : 'No fire today'}
+          {isMultipleToday
+            ? `${todayCount} fires today`
+            : isToday
+              ? 'Fire today'
+              : 'No fire today'}
         </div>
       </header>
 
@@ -1280,16 +1339,68 @@ export default function HomePage() {
           <div style={statusTopRowStyle}>
             <p style={siteTitleStyle}>Chișinău, Moldova</p>
             <p style={questionStyle}>
-              {isToday
-                ? 'There is a fire today at'
-                : 'Days since the last fire in Chișinău'}
+              {isMultipleToday
+                ? `${todayCount} simultaneous fires in Chișinău`
+                : isToday
+                  ? 'There is a fire today at'
+                  : 'Days since the last fire in Chișinău'}
             </p>
           </div>
 
           {isToday ? (
             <>
               <h1 style={yesHeadingStyle}>YES</h1>
-              <LocationPill street={latestIncident.street} isAlert />
+
+              {isMultipleToday && (
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '7px 18px',
+                    borderRadius: '9999px',
+                    backgroundColor: 'rgba(255,59,48,0.18)',
+                    border: '1px solid rgba(255,59,48,0.5)',
+                    color: '#ff8a80',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.14em',
+                    textTransform: 'uppercase',
+                    boxShadow: '0 0 24px rgba(255,59,48,0.28)',
+                    animation: 'status-bar-pulse 1.1s ease-in-out infinite',
+                    fontFamily: token.fontSystem,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: '7px',
+                      height: '7px',
+                      borderRadius: '50%',
+                      backgroundColor: token.red,
+                      boxShadow: `0 0 8px ${token.red}`,
+                      flexShrink: 0,
+                    }}
+                    aria-hidden
+                  />
+                  {todayCount} active fires right now
+                </div>
+              )}
+
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                  justifyContent: 'center',
+                  maxWidth: '520px',
+                }}
+              >
+                {(isMultipleToday ? todayIncidents : [latestIncident]).map(
+                  (i) => (
+                    <LocationPill key={i.id} street={i.street} isAlert />
+                  ),
+                )}
+              </div>
             </>
           ) : (
             <>
