@@ -8,18 +8,21 @@ const incidents = [
     datetime: '2024-09-01T10:00:00Z',
     photo_url: 'http://example.com/photo.jpg',
     street: 'Stefan cel Mare',
+    source_url: 'https://stiri.md/article/123',
   },
   {
     id: 2,
     datetime: '2024-06-15T10:00:00Z',
     photo_url: 'http://example.com/photo2.jpg',
     street: 'Dacia',
+    source_url: '',
   },
   {
     id: 3,
     datetime: '2023-12-31T10:00:00Z',
     photo_url: 'http://example.com/photo3.jpg',
     street: 'Independence',
+    source_url: '',
   },
 ];
 

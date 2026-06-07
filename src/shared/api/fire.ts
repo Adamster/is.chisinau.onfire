@@ -7,6 +7,7 @@ export const FireIncidentSchema = z.object({
   datetime: z.string(),
   photo_url: z.string().url(),
   street: z.string(),
+  source_url: z.string().default(''),
 });
 
 export type FireIncident = z.infer<typeof FireIncidentSchema>;
