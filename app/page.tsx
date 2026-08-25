@@ -152,6 +152,30 @@ const PinIcon = () => (
   </svg>
 );
 
+const ExternalLinkIcon = () => (
+  <svg
+    width="12"
+    height="12"
+    viewBox="0 0 12 12"
+    fill="none"
+    aria-hidden="true"
+  >
+    <path
+      d="M5 2H2.5A.5.5 0 002 2.5v7a.5.5 0 00.5.5h7a.5.5 0 00.5-.5V7"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      strokeLinecap="round"
+    />
+    <path
+      d="M7 2h3v3M10 2L6 6"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 const FlameIcon = () => (
   <svg
     width="12"
@@ -1370,6 +1394,19 @@ export default function HomePage() {
                     >
                       <PinIcon />
                       {incident.street}
+                      {incident.source_url && (
+                        <span
+                          style={{
+                            marginLeft: 'auto',
+                            color: isActive ? token.red : token.gray400,
+                            opacity: 0.7,
+                            flexShrink: 0,
+                          }}
+                          title="Has source article"
+                        >
+                          <ExternalLinkIcon />
+                        </span>
+                      )}
                     </span>
                   </button>
                 </li>
@@ -1498,6 +1535,45 @@ export default function HomePage() {
                 />
               </span>
             </div>
+
+            {/* Source row — only when URL is available */}
+            {selectedIncident.source_url && (
+              <div style={cardRowStyle}>
+                <span style={cardLabelStyle}>
+                  <ExternalLinkIcon />
+                  Source
+                </span>
+                <a
+                  href={selectedIncident.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    ...cardValueStyle,
+                    color: token.gray400,
+                    textDecoration: 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    fontSize: '0.8rem',
+                    transition: 'color 0.2s',
+                  }}
+                  onMouseEnter={(e) =>
+                    ((e.currentTarget as HTMLAnchorElement).style.color =
+                      token.gray200)
+                  }
+                  onMouseLeave={(e) =>
+                    ((e.currentTarget as HTMLAnchorElement).style.color =
+                      token.gray400)
+                  }
+                >
+                  {new URL(selectedIncident.source_url).hostname.replace(
+                    /^www\./,
+                    '',
+                  )}
+                  <ExternalLinkIcon />
+                </a>
+              </div>
+            )}
           </div>
         </article>
       </section>

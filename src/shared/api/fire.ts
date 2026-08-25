@@ -11,7 +11,7 @@ import {
  * column (internal notes, reporter contact, ...) is not shipped to the browser
  * by accident.
  */
-const INCIDENT_COLUMNS = 'id,datetime,photo_url,street';
+const INCIDENT_COLUMNS = 'id,datetime,photo_url,street,source_url';
 
 /**
  * `z.string().url()` is scheme-agnostic: it accepts `javascript:`, `data:` and
@@ -45,6 +45,7 @@ export const FireIncidentSchema = z.object({
   datetime: z.string(),
   photo_url: PhotoUrlSchema,
   street: z.string(),
+  source_url: z.string().default(''),
 });
 
 export type FireIncident = z.infer<typeof FireIncidentSchema>;

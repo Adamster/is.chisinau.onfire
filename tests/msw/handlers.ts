@@ -18,12 +18,16 @@ const OFFSETS_IN_DAYS = [3, 20, 200, 500];
 function buildIncidents() {
   const now = Date.now();
   const streets = ['Stefan cel Mare', 'Dacia', 'Independence', 'Alba Iulia'];
+  // Mixed on purpose: the incident card and the sidebar badge both branch on
+  // whether a source article exists.
+  const sourceUrls = ['https://stiri.md/article/123', '', '', ''];
 
   return OFFSETS_IN_DAYS.map((days, i) => ({
     id: i + 1,
     datetime: new Date(now - days * DAY_MS).toISOString(),
     photo_url: `${SUPABASE_URL}/storage/v1/object/public/photos/${i + 1}.jpg`,
     street: streets[i],
+    source_url: sourceUrls[i],
   }));
 }
 
