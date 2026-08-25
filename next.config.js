@@ -12,7 +12,16 @@ function parseUrl(rawUrl) {
 }
 
 const isDev = process.env.NODE_ENV !== 'production';
-const supabase = parseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
+
+/**
+ * Mirrors the dev fallback in src/shared/config.ts: with no `.env.local` the app
+ * talks to the MSW mock origin, so img-src/connect-src have to allow it or dev
+ * blocks the very requests the fixtures answer.
+ */
+const supabase = parseUrl(
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    (isDev ? 'https://supabase.test' : undefined),
+);
 
 /**
  * Hosts allowed to serve incident photos. Kept in sync with

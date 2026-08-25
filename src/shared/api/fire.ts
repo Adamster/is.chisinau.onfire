@@ -49,7 +49,10 @@ export const PhotoUrlSchema = z
  *
  * Unlike `photo_url`, an unusable value degrades to '' instead of rejecting the
  * row: the source link is optional decoration, so losing it beats losing the
- * whole incident feed.
+ * whole incident feed. That includes SQL NULL — the column was added after rows
+ * already existed, so every backfilled row arrives as `null`, and `.default('')`
+ * covers only `undefined`. A strict `z.string()` there fails the array parse and
+ * takes the entire feed down with it.
  */
 function isHttpUrl(raw: string): boolean {
   if (!raw) return false;
@@ -63,8 +66,8 @@ function isHttpUrl(raw: string): boolean {
 
 export const SourceUrlSchema = z
   .string()
-  .default('')
-  .transform((raw) => (isHttpUrl(raw) ? raw : ''));
+  .nullish()
+  .transform((raw) => (raw && isHttpUrl(raw) ? raw : ''));
 
 export const FireIncidentSchema = z.object({
   id: z.number(),

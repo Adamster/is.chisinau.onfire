@@ -157,6 +157,9 @@ describe('SourceUrlSchema', () => {
     ['a non-empty non-url', 'see the evening news'],
     ['an empty string', ''],
     ['a missing value', undefined],
+    // Rows predating the column arrive as SQL NULL, which `.default('')` — it
+    // only fires on undefined — would have rejected, failing the whole feed.
+    ['a null column', null],
   ])('degrades %s to an empty string', (_label, value) => {
     expect(SourceUrlSchema.parse(value)).toBe('');
   });
@@ -171,6 +174,26 @@ describe('SourceUrlSchema', () => {
             photo_url: 'https://supabase.test/storage/photo.jpg',
             street: 'Stefan cel Mare',
             source_url: 'javascript:alert(1)',
+          },
+        ]),
+      ),
+    );
+
+    const [incident] = await getFireIncidents();
+    expect(incident.street).toBe('Stefan cel Mare');
+    expect(incident.source_url).toBe('');
+  });
+
+  it('keeps the feed when a backfilled row has a null source_url', async () => {
+    server.use(
+      http.get('https://supabase.test/rest/v1/fire_incidents', () =>
+        HttpResponse.json([
+          {
+            id: 1,
+            datetime: '2026-08-22T10:00:00Z',
+            photo_url: 'https://supabase.test/storage/photo.jpg',
+            street: 'Stefan cel Mare',
+            source_url: null,
           },
         ]),
       ),

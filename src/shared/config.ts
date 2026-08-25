@@ -1,6 +1,23 @@
-export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-export const SUPABASE_ANON_KEY = process.env
-  .NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+/**
+ * Dev fallback. `app/providers.tsx` starts the MSW worker for every
+ * non-production build, and `tests/msw/handlers.ts` intercepts this origin, so
+ * `pnpm dev` is served entirely by fixtures. Without a fallback the Supabase
+ * client throws on the missing env var *before* a request is ever made, which
+ * MSW cannot intercept — a fresh checkout with no `.env.local` renders "Could
+ * not load incidents." instead of the mock feed. Production still fails loudly
+ * (see `getSupabaseClient`); this only papers over the dev path that is already
+ * mocked. It is also exactly what the Playwright `webServer` passes in.
+ */
+const MOCK_SUPABASE_URL = 'https://supabase.test';
+const MOCK_SUPABASE_ANON_KEY = 'msw-anon-key';
+
+const isProduction = process.env.NODE_ENV === 'production';
+
+export const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  (isProduction ? '' : MOCK_SUPABASE_URL)) as string;
+
+export const SUPABASE_ANON_KEY = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  (isProduction ? '' : MOCK_SUPABASE_ANON_KEY)) as string;
 
 function hostOf(rawUrl: string | undefined): string[] {
   if (!rawUrl) return [];

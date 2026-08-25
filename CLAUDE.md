@@ -64,6 +64,16 @@ directive. Since these are `NEXT_PUBLIC_*` they must be present at build time.
 missing when the client is first constructed (lazily, via a module-level cached
 client).
 
+**`.env.local` is only needed for real data.** In any non-production build
+`src/shared/config.ts` falls back to `https://supabase.test` — the origin the MSW
+handlers intercept — so `pnpm dev` works on a fresh clone with no env at all.
+Without that fallback the client constructor throws _before_ any request, which
+MSW cannot intercept, and the page renders "Could not load incidents." The
+fallback is dev-only: production with a missing var still fails loudly.
+`next.config.js` mirrors it so dev `img-src`/`connect-src` allow the mock origin.
+The Playwright `webServer` deliberately passes **no** env, so e2e exercises the
+same path a developer gets.
+
 ## Security invariants
 
 - **`photo_url` is validated for scheme and host**, not just URL shape:

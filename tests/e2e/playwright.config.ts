@@ -4,8 +4,10 @@ export default defineConfig({
   timeout: 30_000,
   testDir: '.',
   webServer: {
-    command:
-      'NEXT_PUBLIC_SUPABASE_URL=https://supabase.test NEXT_PUBLIC_SUPABASE_ANON_KEY=anon pnpm dev',
+    // No env vars: dev falls back to the MSW mock origin on its own (see
+    // src/shared/config.ts), so this runs the same path `pnpm dev` gives a
+    // developer with no `.env.local` — which is what regressed.
+    command: 'pnpm dev',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
   },
