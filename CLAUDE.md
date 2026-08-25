@@ -55,10 +55,16 @@ Supabase is the only backend. (`NEXT_PUBLIC_API_BASE_URL` used to sit in
 
 `src/shared/config.ts` reads these at module load and derives
 `ALLOWED_IMAGE_HOSTS` — the Supabase project host plus anything in
-`NEXT_PUBLIC_EXTRA_IMAGE_HOSTS`. That list is the single source of truth for
-where incident photos may come from, and it is consumed in three places: the
-`photo_url` Zod schema, `images.remotePatterns`, and the CSP `img-src`
-directive. Since these are `NEXT_PUBLIC_*` they must be present at build time.
+`NEXT_PUBLIC_EXTRA_IMAGE_HOSTS`. Since these are `NEXT_PUBLIC_*` they must be
+present at build time.
+
+`ALLOWED_IMAGE_HOSTS` is an **optimization** allowlist, not a security boundary.
+Incident photos are hotlinked from whichever outlet reported the fire
+(`https://ziua.md/wp-content/uploads/...`), never from Supabase storage, so it
+cannot decide which rows are valid. It feeds `images.remotePatterns` and
+`isOptimizablePhotoHost`, which `app/page.tsx` uses to pick `unoptimized` for
+hosts Next may not proxy. Listing an outlet buys resizing/AVIF for its photos;
+leaving it out costs bandwidth, not correctness.
 
 `src/shared/api/fire.ts` throws a descriptive error if either Supabase var is
 missing when the client is first constructed (lazily, via a module-level cached
@@ -76,9 +82,13 @@ same path a developer gets.
 
 ## Security invariants
 
-- **`photo_url` is validated for scheme and host**, not just URL shape:
-  `z.string().url()` accepts `javascript:` and `data:`. `PhotoUrlSchema` requires
-  https on an allowed host. A row failing this rejects the whole response.
+- **`photo_url` is validated for scheme**, not just URL shape: `z.string().url()`
+  accepts `javascript:` and `data:`. `PhotoUrlSchema` requires https. A row
+  failing this rejects the whole response, which is why the check is scheme-only
+  — it once also required an allowlisted host, and since every real photo is
+  hotlinked from a news site, that took the entire production feed down with
+  "Could not load incidents." Don't put host rules back into the schema; a
+  correctness gate can only test properties the data actually has.
 - **Never interpolate `photo_url` into CSS.** It previously fed a `<body>`
   `background-image: url(...)`; that was removed. Attribute contexts
   (`<Image src>`, OG meta) are escaped by React/Next and are fine.
@@ -86,7 +96,9 @@ same path a developer gets.
   next column added to the table ships to the browser.
 - **Security headers live in `next.config.js`.** The CSP keeps `'unsafe-inline'`
   for script and style (inline styles everywhere, plus Next's bootstrap
-  scripts), so its real value is `img-src`, `connect-src` and `frame-ancestors`.
+  scripts), so its real value is `connect-src` and `frame-ancestors`. `img-src`
+  is `https:` for the same reason the schema is scheme-only: a host list there
+  blanks the background photo for every outlet not yet enumerated.
 - **`public/mockServiceWorker.js` is gitignored** and must stay that way: a
   root-scoped service worker in production is a durable XSS foothold.
 - Everything else rests on **Supabase RLS**, which is not visible from this repo.

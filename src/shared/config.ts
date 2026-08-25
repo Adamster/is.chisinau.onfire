@@ -36,15 +36,35 @@ function splitHosts(rawList: string | undefined): string[] {
 }
 
 /**
- * Hosts permitted to serve incident photos. Defaults to the Supabase project
- * host (storage lives on the same host) and can be extended for photos hosted
- * elsewhere. Consumed by the `photo_url` schema in `api/fire.ts` and mirrored by
- * `images.remotePatterns` / the CSP `img-src` directive in `next.config.js`.
+ * Hosts whose photos we run through the `next/image` optimizer. This is an
+ * *optimization* allowlist, not a security boundary — `images.remotePatterns`
+ * refuses to proxy anything not listed here, so an unlisted host has to render
+ * `unoptimized` instead (see `isOptimizablePhotoHost`).
  *
- * Empty means "unconfigured" — the schema then falls back to enforcing https
- * only, so a missing env var degrades the allowlist instead of breaking the app.
+ * It is deliberately NOT what validates `photo_url`. Incident photos are
+ * hotlinked from whichever outlet reported the fire (ziua.md, stiri.md, ...), so
+ * gating the Zod schema on this list rejected every real row — and because one
+ * bad row fails the whole array parse, the entire feed died behind "Could not
+ * load incidents." Scheme validation is the security property; see
+ * `PhotoUrlSchema` in `api/fire.ts`.
+ *
+ * Add a frequently-seen outlet to `NEXT_PUBLIC_EXTRA_IMAGE_HOSTS` to get
+ * resizing/AVIF for its photos; leaving it out costs bandwidth, not correctness.
  */
 export const ALLOWED_IMAGE_HOSTS: readonly string[] = [
   ...hostOf(SUPABASE_URL),
   ...splitHosts(process.env.NEXT_PUBLIC_EXTRA_IMAGE_HOSTS),
 ];
+
+/**
+ * Whether `next/image` may proxy this photo. False means render it as-is with
+ * `unoptimized`, which bypasses `remotePatterns` entirely — the difference
+ * between a heavier image and no image at all.
+ */
+export function isOptimizablePhotoHost(rawUrl: string): boolean {
+  try {
+    return ALLOWED_IMAGE_HOSTS.includes(new URL(rawUrl).host);
+  } catch {
+    return false;
+  }
+}

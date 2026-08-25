@@ -1,10 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
-import {
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY,
-  ALLOWED_IMAGE_HOSTS,
-} from '../config';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config';
 
 /**
  * Columns we actually render. Listed explicitly rather than `*` so a future
@@ -16,29 +12,30 @@ const INCIDENT_COLUMNS = 'id,datetime,photo_url,street,source_url';
 /**
  * `z.string().url()` is scheme-agnostic: it accepts `javascript:`, `data:` and
  * URLs whose path contains CSS-significant characters. `photo_url` reaches an
- * `<Image src>` and the OpenGraph card, so restrict it to https on a known host.
- * With no hosts configured we still enforce https rather than failing closed.
+ * `<Image src>` and the OpenGraph card, so require https.
+ *
+ * Scheme is the whole security property here, and deliberately the only one.
+ * This used to also require a host on `ALLOWED_IMAGE_HOSTS`, which took
+ * production down: incident photos are hotlinked from whichever outlet reported
+ * the fire (`https://ziua.md/wp-content/uploads/...`), never from Supabase
+ * storage, so every row failed — and one failed row fails the whole array parse,
+ * so the entire feed rendered as "Could not load incidents." A host allowlist
+ * cannot be a correctness gate for data we do not host. What the allowlist still
+ * governs is whether `next/image` may proxy the photo; unlisted hosts render
+ * `unoptimized`. See `ALLOWED_IMAGE_HOSTS` in ../config.
  */
-function isAllowedPhotoUrl(raw: string): boolean {
-  let url: URL;
+function isHttpsUrl(raw: string): boolean {
   try {
-    url = new URL(raw);
+    return new URL(raw).protocol === 'https:';
   } catch {
     return false;
   }
-  if (url.protocol !== 'https:') return false;
-  return ALLOWED_IMAGE_HOSTS.length === 0
-    ? true
-    : ALLOWED_IMAGE_HOSTS.includes(url.host);
 }
 
 export const PhotoUrlSchema = z
   .string()
   .url()
-  .refine(
-    isAllowedPhotoUrl,
-    'photo_url must be an https URL on an allowed host',
-  );
+  .refine(isHttpsUrl, 'photo_url must be an https URL');
 
 /**
  * `source_url` is rendered as an `href` and passed to `new URL()` during render,

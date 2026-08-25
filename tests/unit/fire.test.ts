@@ -104,18 +104,20 @@ describe('getFireYearActivity', () => {
 // made them exploitable was removed from app/layout.tsx, and every remaining
 // consumer puts the value in an attribute that React/Next escapes.
 describe('PhotoUrlSchema', () => {
-  it('accepts an https URL on the configured Supabase host', () => {
-    expect(
-      PhotoUrlSchema.safeParse('https://supabase.test/storage/photo.jpg')
-        .success,
-    ).toBe(true);
+  it.each([
+    ['the configured Supabase host', 'https://supabase.test/storage/photo.jpg'],
+    // Real production shape: photos are hotlinked from the outlet that reported
+    // the fire. Requiring an allowlisted host here failed every row, and one bad
+    // row fails the whole array parse, so the feed died entirely.
+    ['a third-party news host', 'https://ziua.md/wp-content/uploads/i.jpg'],
+  ])('accepts an https URL on %s', (_label, value) => {
+    expect(PhotoUrlSchema.safeParse(value).success).toBe(true);
   });
 
   it.each([
     ['javascript: scheme', 'javascript:alert(1)'],
     ['data: scheme', 'data:text/html,<script>alert(1)</script>'],
     ['plain http', 'http://supabase.test/storage/photo.jpg'],
-    ['foreign host', 'https://evil.test/photo.jpg'],
     ['not a url at all', 'not-a-url'],
   ])('rejects %s', (_label, value) => {
     expect(PhotoUrlSchema.safeParse(value).success).toBe(false);
@@ -123,14 +125,34 @@ describe('PhotoUrlSchema', () => {
 });
 
 describe('getFireIncidents validation', () => {
-  it('rejects the whole response when a row carries a disallowed photo host', async () => {
+  it('keeps a feed whose photos are hotlinked from a news site', async () => {
+    server.use(
+      http.get('https://supabase.test/rest/v1/fire_incidents', () =>
+        HttpResponse.json([
+          {
+            id: 28,
+            datetime: '2026-06-08T06:58:50+00:00',
+            photo_url:
+              'https://ziua.md/wp-content/uploads/2026/06/incendiu.jpg',
+            street: 'strada Pușkin 62',
+            source_url: 'https://ziua.md/incendiu-langa-sediul/',
+          },
+        ]),
+      ),
+    );
+
+    const [incident] = await getFireIncidents();
+    expect(incident.street).toBe('strada Pușkin 62');
+  });
+
+  it('rejects the whole response when a row carries an unusable photo scheme', async () => {
     server.use(
       http.get('https://supabase.test/rest/v1/fire_incidents', () =>
         HttpResponse.json([
           {
             id: 1,
             datetime: '2026-08-22T10:00:00Z',
-            photo_url: 'https://evil.test/photo.jpg',
+            photo_url: 'javascript:alert(1)',
             street: 'Stefan cel Mare',
           },
         ]),
