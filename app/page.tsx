@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   getFireIncidents,
   getFireYearActivity,
+  INCIDENT_LIST_LIMIT,
   type FireIncident,
   type FireMonthlyStats,
 } from '../src/shared/api/fire';
@@ -1260,8 +1261,11 @@ export default function HomePage() {
                 letterSpacing: '0.04em',
               }}
             >
-              {incidents.length} recorded incident
-              {incidents.length !== 1 ? 's' : ''}
+              {incidents.length === INCIDENT_LIST_LIMIT
+                ? `${INCIDENT_LIST_LIMIT} most recent incidents`
+                : `${incidents.length} recorded incident${
+                    incidents.length !== 1 ? 's' : ''
+                  }`}
             </p>
           </div>
           <button
