@@ -6,19 +6,19 @@ const incidents = [
   {
     id: 1,
     datetime: '2024-09-01T10:00:00Z',
-    photo_url: 'http://example.com/photo.jpg',
+    photo_url: `${SUPABASE_URL}/storage/v1/object/public/photos/1.jpg`,
     street: 'Stefan cel Mare',
   },
   {
     id: 2,
     datetime: '2024-06-15T10:00:00Z',
-    photo_url: 'http://example.com/photo2.jpg',
+    photo_url: `${SUPABASE_URL}/storage/v1/object/public/photos/2.jpg`,
     street: 'Dacia',
   },
   {
     id: 3,
     datetime: '2023-12-31T10:00:00Z',
-    photo_url: 'http://example.com/photo3.jpg',
+    photo_url: `${SUPABASE_URL}/storage/v1/object/public/photos/3.jpg`,
     street: 'Independence',
   },
 ];

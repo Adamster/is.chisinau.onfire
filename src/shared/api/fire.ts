@@ -1,11 +1,49 @@
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config';
+import {
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  ALLOWED_IMAGE_HOSTS,
+} from '../config';
+
+/**
+ * Columns we actually render. Listed explicitly rather than `*` so a future
+ * column (internal notes, reporter contact, ...) is not shipped to the browser
+ * by accident.
+ */
+const INCIDENT_COLUMNS = 'id,datetime,photo_url,street';
+
+/**
+ * `z.string().url()` is scheme-agnostic: it accepts `javascript:`, `data:` and
+ * URLs whose path contains CSS-significant characters. `photo_url` reaches an
+ * `<Image src>` and the OpenGraph card, so restrict it to https on a known host.
+ * With no hosts configured we still enforce https rather than failing closed.
+ */
+function isAllowedPhotoUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'https:') return false;
+  return ALLOWED_IMAGE_HOSTS.length === 0
+    ? true
+    : ALLOWED_IMAGE_HOSTS.includes(url.host);
+}
+
+export const PhotoUrlSchema = z
+  .string()
+  .url()
+  .refine(
+    isAllowedPhotoUrl,
+    'photo_url must be an https URL on an allowed host',
+  );
 
 export const FireIncidentSchema = z.object({
   id: z.number(),
   datetime: z.string(),
-  photo_url: z.string().url(),
+  photo_url: PhotoUrlSchema,
   street: z.string(),
 });
 
@@ -34,7 +72,7 @@ export async function getFireIncidents(): Promise<FireIncident[]> {
   const client = getSupabaseClient();
   const { data, error } = await client
     .from('fire_incidents')
-    .select('*')
+    .select(INCIDENT_COLUMNS)
     .order('datetime', { ascending: false });
 
   if (error) {
@@ -53,7 +91,7 @@ export async function getLastFire(): Promise<FireIncident | null> {
   const client = getSupabaseClient();
   const { data, error } = await client
     .from('fire_incidents')
-    .select('*')
+    .select(INCIDENT_COLUMNS)
     .order('datetime', { ascending: false })
     .limit(1);
 
@@ -81,7 +119,7 @@ export async function getFireIncidentsByMonth(): Promise<FireMonthlyStats> {
 
   const { data, error } = await client
     .from('fire_incidents')
-    .select('*')
+    .select(INCIDENT_COLUMNS)
     .gte('datetime', startOfYear);
 
   if (error) throw error;
@@ -116,8 +154,14 @@ export async function getFireStats(): Promise<FireStats> {
   const startOfYear = new Date(now.getFullYear(), 0, 1).toISOString();
 
   const [monthRes, yearRes] = await Promise.all([
-    client.from('fire_incidents').select('*').gte('datetime', startOfMonth),
-    client.from('fire_incidents').select('*').gte('datetime', startOfYear),
+    client
+      .from('fire_incidents')
+      .select(INCIDENT_COLUMNS)
+      .gte('datetime', startOfMonth),
+    client
+      .from('fire_incidents')
+      .select(INCIDENT_COLUMNS)
+      .gte('datetime', startOfYear),
   ]);
 
   if (monthRes.error) throw monthRes.error;

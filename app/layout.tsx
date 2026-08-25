@@ -49,13 +49,16 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default async function RootLayout({
+// The photo is rendered by the <Image> inside app/page.tsx. It is deliberately
+// NOT also set as a <body> background-image: every render branch of the page
+// paints an opaque, full-viewport <main> over the body, so a body background was
+// downloaded at full resolution and never seen — and interpolating photo_url
+// into a CSS url() was an injection sink for a tampered row.
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const incident = await fetchLastFire();
-
   return (
     <html lang="en">
       <head>
@@ -104,9 +107,6 @@ export default async function RootLayout({
       </head>
       <body
         style={{
-          backgroundImage: incident ? `url(${incident.photo_url})` : undefined,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
           backgroundColor: '#000',
           margin: 0,
           minHeight: '100vh',

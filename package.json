@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "predev": "pnpm msw:init",
     "dev": "next dev",
+    "prebuild": "node -e \"require('fs').rmSync('public/mockServiceWorker.js',{force:true})\"",
     "build": "next build",
     "start": "next start -p 3000",
     "typecheck": "tsc -p tsconfig.json --noEmit",
