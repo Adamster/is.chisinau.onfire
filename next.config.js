@@ -12,7 +12,16 @@ function parseUrl(rawUrl) {
 }
 
 const isDev = process.env.NODE_ENV !== 'production';
-const supabase = parseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
+
+/**
+ * Mirrors the dev fallback in src/shared/config.ts: with no `.env.local` the app
+ * talks to the MSW mock origin, so img-src/connect-src have to allow it or dev
+ * blocks the very requests the fixtures answer.
+ */
+const supabase = parseUrl(
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    (isDev ? 'https://supabase.test' : undefined),
+);
 
 /**
  * Hosts allowed to serve incident photos. Kept in sync with
@@ -35,14 +44,19 @@ const supabaseOrigins = supabase
  * Note on `'unsafe-inline'`: the whole UI is built from inline style objects and
  * an inline <style> block in app/layout.tsx, and Next injects inline bootstrap
  * scripts. A nonce-based policy would require middleware, so script/style stay
- * permissive here — the value this CSP does add is img-src, connect-src and
- * frame-ancestors, which is also what blunts a tampered photo_url.
+ * permissive here — the value this CSP does add is connect-src and
+ * frame-ancestors.
+ *
+ * `img-src` is `https:` rather than a host list: photos are hotlinked from
+ * whichever outlet reported the fire, so enumerating hosts blanks the background
+ * for every outlet we have not met yet. An image URL cannot execute script and
+ * PhotoUrlSchema already rejects non-https schemes, so the list bought little.
  */
 const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
   "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: blob:${imageHosts.map((h) => ` https://${h}`).join('')}`,
+  "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
   `connect-src 'self'${supabaseOrigins.map((o) => ` ${o}`).join('')}${
     isDev ? ' ws: http://localhost:*' : ''

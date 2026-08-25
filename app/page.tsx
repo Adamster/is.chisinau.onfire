@@ -8,6 +8,7 @@ import {
   type FireIncident,
   type FireMonthlyStats,
 } from '../src/shared/api/fire';
+import { isOptimizablePhotoHost } from '../src/shared/config';
 import Image from 'next/image';
 
 // ---------------------------------------------------------------------------
@@ -1214,6 +1215,14 @@ export default function HomePage() {
           fill
           priority
           sizes="100vw"
+          /*
+           * Photos live on whichever outlet reported the fire, and
+           * `images.remotePatterns` refuses to proxy a host it does not list —
+           * which blanks the background rather than merely costing bandwidth.
+           * `unoptimized` bypasses the proxy, so an unlisted outlet still
+           * renders. Add the frequent ones to NEXT_PUBLIC_EXTRA_IMAGE_HOSTS.
+           */
+          unoptimized={!isOptimizablePhotoHost(selectedIncident.photo_url)}
           style={{ objectFit: 'cover' }}
         />
       </div>
