@@ -68,12 +68,22 @@ function getSupabaseClient() {
   return cachedClient;
 }
 
-export async function getFireIncidents(): Promise<FireIncident[]> {
+/**
+ * Newest-first incident list for the sidebar and the selected-photo background.
+ * Bounded: the sidebar only ever shows recent history, and an unbounded
+ * `select` grows without limit as the table does.
+ */
+export const INCIDENT_LIST_LIMIT = 100;
+
+export async function getFireIncidents(
+  limit: number = INCIDENT_LIST_LIMIT,
+): Promise<FireIncident[]> {
   const client = getSupabaseClient();
   const { data, error } = await client
     .from('fire_incidents')
     .select(INCIDENT_COLUMNS)
-    .order('datetime', { ascending: false });
+    .order('datetime', { ascending: false })
+    .limit(limit);
 
   if (error) {
     throw error;
@@ -112,30 +122,6 @@ export const FireMonthlyStatsSchema = z.array(
 );
 export type FireMonthlyStats = z.infer<typeof FireMonthlyStatsSchema>;
 
-export async function getFireIncidentsByMonth(): Promise<FireMonthlyStats> {
-  const client = getSupabaseClient();
-  const now = new Date();
-  const startOfYear = new Date(now.getFullYear(), 0, 1).toISOString();
-
-  const { data, error } = await client
-    .from('fire_incidents')
-    .select(INCIDENT_COLUMNS)
-    .gte('datetime', startOfYear);
-
-  if (error) throw error;
-
-  const parsed = z.array(FireIncidentSchema).parse(data ?? []);
-  const counts = Array.from({ length: 12 }, (_, i) => ({
-    month: i + 1,
-    count: 0,
-  }));
-  for (const incident of parsed) {
-    const m = new Date(incident.datetime).getMonth();
-    counts[m].count++;
-  }
-  return FireMonthlyStatsSchema.parse(counts);
-}
-
 export const FireStatsSchema = z.object({
   month: z.number(),
   year: z.number(),
@@ -143,30 +129,55 @@ export const FireStatsSchema = z.object({
 
 export type FireStats = z.infer<typeof FireStatsSchema>;
 
-export async function getFireStats(): Promise<FireStats> {
+export type FireYearActivity = {
+  stats: FireStats;
+  monthly: FireMonthlyStats;
+};
+
+const YearRowSchema = z.object({ datetime: z.string() });
+
+/**
+ * Month count, year count and the per-month chart from a single query.
+ *
+ * Previously this was three round trips (`getFireStats` fetched every row of the
+ * month *and* every row of the year, `getFireIncidentsByMonth` fetched the year
+ * again) each pulling full rows in order to call `.length` on them. One
+ * datetime-only query over the current year serves all three.
+ */
+export async function getFireYearActivity(): Promise<FireYearActivity> {
   const client = getSupabaseClient();
   const now = new Date();
-  const startOfMonth = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    1,
-  ).toISOString();
-  const startOfYear = new Date(now.getFullYear(), 0, 1).toISOString();
+  const year = now.getFullYear();
+  const startOfYear = new Date(year, 0, 1).toISOString();
 
-  const [monthRes, yearRes] = await Promise.all([
-    client
-      .from('fire_incidents')
-      .select(INCIDENT_COLUMNS)
-      .gte('datetime', startOfMonth),
-    client
-      .from('fire_incidents')
-      .select(INCIDENT_COLUMNS)
-      .gte('datetime', startOfYear),
-  ]);
+  const { data, error } = await client
+    .from('fire_incidents')
+    .select('datetime')
+    .gte('datetime', startOfYear);
 
-  if (monthRes.error) throw monthRes.error;
-  if (yearRes.error) throw yearRes.error;
+  if (error) throw error;
 
-  const stats = { month: monthRes.data.length, year: yearRes.data.length };
-  return FireStatsSchema.parse(stats);
+  const rows = z.array(YearRowSchema).parse(data ?? []);
+  const monthly = Array.from({ length: 12 }, (_, i) => ({
+    month: i + 1,
+    count: 0,
+  }));
+
+  const currentMonth = now.getMonth();
+  let monthCount = 0;
+  let yearCount = 0;
+
+  for (const row of rows) {
+    const date = new Date(row.datetime);
+    // `gte` has no upper bound, so a future-dated row could land in the wrong year.
+    if (date.getFullYear() !== year) continue;
+    monthly[date.getMonth()].count++;
+    yearCount++;
+    if (date.getMonth() === currentMonth) monthCount++;
+  }
+
+  return {
+    stats: FireStatsSchema.parse({ month: monthCount, year: yearCount }),
+    monthly: FireMonthlyStatsSchema.parse(monthly),
+  };
 }

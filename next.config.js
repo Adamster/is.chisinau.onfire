@@ -71,6 +71,18 @@ const securityHeaders = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  images: {
+    /**
+     * Enables AVIF/WebP + responsive resizing for the full-screen incident photo,
+     * which was previously served `unoptimized` at full resolution to every
+     * device. Doubles as an allowlist: without a matching pattern Next refuses to
+     * proxy a URL through /_next/image.
+     */
+    remotePatterns: imageHosts.map((hostname) => ({
+      protocol: 'https',
+      hostname,
+    })),
+  },
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },

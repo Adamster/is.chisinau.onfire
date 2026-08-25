@@ -13,18 +13,23 @@ import {
 import { http, HttpResponse } from 'msw';
 import { server } from '../msw/server';
 
-let getLastFire: (typeof import('../../src/shared/api/fire'))['getLastFire'];
-let getFireStats: (typeof import('../../src/shared/api/fire'))['getFireStats'];
-let getFireIncidents: (typeof import('../../src/shared/api/fire'))['getFireIncidents'];
-let PhotoUrlSchema: (typeof import('../../src/shared/api/fire'))['PhotoUrlSchema'];
+type FireApi = typeof import('../../src/shared/api/fire');
+
+let getLastFire: FireApi['getLastFire'];
+let getFireIncidents: FireApi['getFireIncidents'];
+let getFireYearActivity: FireApi['getFireYearActivity'];
+let PhotoUrlSchema: FireApi['PhotoUrlSchema'];
 
 beforeAll(async () => {
   server.listen();
-  ({ getLastFire, getFireStats, getFireIncidents, PhotoUrlSchema } =
+  ({ getLastFire, getFireIncidents, getFireYearActivity, PhotoUrlSchema } =
     await import('../../src/shared/api/fire'));
 });
 
-afterEach(() => server.resetHandlers());
+afterEach(() => {
+  server.resetHandlers();
+  vi.useRealTimers();
+});
 afterAll(() => server.close());
 
 describe('getLastFire', () => {
@@ -37,21 +42,54 @@ describe('getLastFire', () => {
 describe('getFireIncidents', () => {
   it('returns incidents ordered from newest to oldest', async () => {
     const incidents = await getFireIncidents();
-    expect(incidents).toHaveLength(3);
+    expect(incidents).toHaveLength(4);
     expect(incidents[0].id).toBe(1);
     expect(new Date(incidents[0].datetime).getTime()).toBeGreaterThan(
       new Date(incidents[1].datetime).getTime(),
     );
   });
+
+  it('bounds the result set with a limit', async () => {
+    const incidents = await getFireIncidents(2);
+    expect(incidents).toHaveLength(2);
+  });
 });
 
-describe('getFireStats', () => {
-  it('counts fires for month and year', async () => {
+describe('getFireYearActivity', () => {
+  it('derives month count, year count and the monthly chart from one query', async () => {
+    // Fixtures are 3, 20, 200 and 500 days old relative to this instant, so:
+    // 2026-08-22 and 2026-08-05 are this month, 2026-02-06 is this year,
+    // and 2025-04-13 falls outside the year window.
     vi.useFakeTimers();
-    vi.setSystemTime(new Date('2024-09-10T12:00:00Z'));
-    const stats = await getFireStats();
-    expect(stats).toEqual({ month: 1, year: 2 });
-    vi.useRealTimers();
+    vi.setSystemTime(new Date('2026-08-25T12:00:00Z'));
+
+    const { stats, monthly } = await getFireYearActivity();
+
+    expect(stats).toEqual({ month: 2, year: 3 });
+    expect(monthly).toHaveLength(12);
+    expect(monthly.find((m) => m.month === 8)?.count).toBe(2);
+    expect(monthly.find((m) => m.month === 2)?.count).toBe(1);
+    expect(monthly.find((m) => m.month === 12)?.count).toBe(0);
+  });
+
+  it('ignores rows dated outside the current year', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-25T12:00:00Z'));
+
+    server.use(
+      http.get('https://supabase.test/rest/v1/fire_incidents', () =>
+        HttpResponse.json([
+          { datetime: '2026-03-04T10:00:00Z' },
+          { datetime: '2027-01-02T10:00:00Z' },
+        ]),
+      ),
+    );
+
+    const { stats, monthly } = await getFireYearActivity();
+
+    expect(stats).toEqual({ month: 0, year: 1 });
+    expect(monthly.find((m) => m.month === 1)?.count).toBe(0);
+    expect(monthly.find((m) => m.month === 3)?.count).toBe(1);
   });
 });
 
@@ -85,7 +123,7 @@ describe('getFireIncidents validation', () => {
         HttpResponse.json([
           {
             id: 1,
-            datetime: '2024-09-01T10:00:00Z',
+            datetime: '2026-08-22T10:00:00Z',
             photo_url: 'https://evil.test/photo.jpg',
             street: 'Stefan cel Mare',
           },

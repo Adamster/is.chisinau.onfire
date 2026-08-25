@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "predev": "pnpm msw:init",
+    "predev": "msw init public/ --save",
     "dev": "next dev",
     "prebuild": "node -e \"require('fs').rmSync('public/mockServiceWorker.js',{force:true})\"",
     "build": "next build",
