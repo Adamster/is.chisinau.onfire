@@ -3,7 +3,11 @@ import type { Metadata } from 'next';
 import Providers from './providers';
 import { getLastFire } from '../src/shared/api/fire';
 
-export const dynamic = 'force-dynamic';
+// Incident data changes a few times a day, but `force-dynamic` made every
+// request block on a Supabase round trip before the first byte. ISR keeps the
+// shell and the OpenGraph card fresh within a minute at a fraction of the reads;
+// the client queries in page.tsx still fetch live data on load.
+export const revalidate = 60;
 
 // Deduplicate the DB call across generateMetadata + RootLayout
 const fetchLastFire = cache(() => getLastFire().catch(() => null));
@@ -49,13 +53,16 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default async function RootLayout({
+// The photo is rendered by the <Image> inside app/page.tsx. It is deliberately
+// NOT also set as a <body> background-image: every render branch of the page
+// paints an opaque, full-viewport <main> over the body, so a body background was
+// downloaded at full resolution and never seen — and interpolating photo_url
+// into a CSS url() was an injection sink for a tampered row.
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const incident = await fetchLastFire();
-
   return (
     <html lang="en">
       <head>
@@ -100,13 +107,64 @@ export default async function RootLayout({
           ::-webkit-scrollbar-thumb:hover {
             background: rgba(255, 255, 255, 0.22);
           }
+
+          /*
+           * Keyframes used by app/page.tsx. These were previously injected into
+           * a <style> tag from a useEffect on mount, which cost a style
+           * recalculation after hydration; they are static, so they belong here.
+           *
+           * Every animation below drives opacity or transform only — both are
+           * compositor-accelerated. The YES glow used to animate text-shadow,
+           * which forces a full repaint of a very large text layer every frame.
+           */
+          @keyframes glow-pulse {
+            0%, 100% { opacity: 1; }
+            50%      { opacity: 0.86; }
+          }
+          @keyframes glow-pulse-fast {
+            0%, 100% { opacity: 1; }
+            25%      { opacity: 0.82; }
+            50%      { opacity: 0.95; }
+            75%      { opacity: 0.85; }
+          }
+          @keyframes fade-up {
+            from { opacity: 0; transform: translateY(16px); }
+            to   { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes shimmer-digit {
+            0%, 100% { opacity: 0.92; }
+            50%      { opacity: 1; }
+          }
+          @keyframes status-bar-pulse {
+            0%, 100% { opacity: 1; }
+            50%      { opacity: 0.7; }
+          }
+          @keyframes bar-grow {
+            from { transform: scaleY(0); }
+            to   { transform: scaleY(1); }
+          }
+          @keyframes chart-reveal {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+          }
+
+          /*
+           * Real reduced-motion support. The previous approach redefined the
+           * keyframes as empty rules, which left the compositor still ticking
+           * every animation. !important is required to beat inline styles.
+           */
+          @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+              animation-duration: 0.01ms !important;
+              animation-iteration-count: 1 !important;
+              transition-duration: 0.01ms !important;
+              scroll-behavior: auto !important;
+            }
+          }
         `}</style>
       </head>
       <body
         style={{
-          backgroundImage: incident ? `url(${incident.photo_url})` : undefined,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
           backgroundColor: '#000',
           margin: 0,
           minHeight: '100vh',

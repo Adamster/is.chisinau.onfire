@@ -3,8 +3,8 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   getFireIncidents,
-  getFireStats,
-  getFireIncidentsByMonth,
+  getFireYearActivity,
+  INCIDENT_LIST_LIMIT,
   type FireIncident,
   type FireMonthlyStats,
 } from '../src/shared/api/fire';
@@ -197,144 +197,146 @@ const FlameIcon = () => (
 );
 
 // ---------------------------------------------------------------------------
-// Keyframe animation injection (runs once, uses a style tag)
+// Cached Intl formatters
+//
+// Constructing an Intl.DateTimeFormat is the expensive part, and these are used
+// once per incident per render. Built once at module scope instead.
 // ---------------------------------------------------------------------------
-const ANIMATIONS_ID = 'is-onfire-keyframes';
+const incidentDateFormat = new Intl.DateTimeFormat(undefined, {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
 
-function injectAnimations() {
-  if (typeof document === 'undefined') return;
-  if (document.getElementById(ANIMATIONS_ID)) return;
-  const style = document.createElement('style');
-  style.id = ANIMATIONS_ID;
-  style.textContent = `
-    @keyframes pulse-glow-red {
-      0%, 100% {
-        text-shadow:
-          0 0 20px rgba(255,59,48,0.9),
-          0 0 60px rgba(255,59,48,0.6),
-          0 0 120px rgba(255,59,48,0.3);
-        opacity: 1;
-      }
-      50% {
-        text-shadow:
-          0 0 40px rgba(255,107,53,1),
-          0 0 100px rgba(255,59,48,0.8),
-          0 0 180px rgba(255,59,48,0.4);
-        opacity: 0.88;
-      }
-    }
-    @keyframes slide-in-left {
-      from { transform: translateX(-105%); }
-      to   { transform: translateX(0); }
-    }
-    @keyframes fade-up {
-      from { opacity: 0; transform: translateY(16px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes shimmer-digit {
-      0%, 100% { background-color: rgba(48,209,88,0.08); }
-      50%       { background-color: rgba(48,209,88,0.16); }
-    }
-    @keyframes status-bar-pulse {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.7; }
-    }
-    @keyframes pulse-glow-multi {
-      0%, 100% {
-        text-shadow:
-          0 0 30px rgba(255,59,48,1),
-          0 0 90px rgba(255,59,48,0.85),
-          0 0 180px rgba(255,59,48,0.55);
-        opacity: 1;
-      }
-      20% {
-        text-shadow:
-          0 0 10px rgba(255,59,48,0.8),
-          0 0 40px rgba(255,59,48,0.6),
-          0 0 90px rgba(255,59,48,0.35);
-        opacity: 0.8;
-      }
-      50% {
-        text-shadow:
-          0 0 60px rgba(255,107,53,1),
-          0 0 140px rgba(255,59,48,0.95),
-          0 0 260px rgba(255,59,48,0.6);
-        opacity: 0.94;
-      }
-      75% {
-        text-shadow:
-          0 0 20px rgba(255,59,48,0.9),
-          0 0 60px rgba(255,59,48,0.65),
-          0 0 120px rgba(255,59,48,0.4);
-        opacity: 0.85;
-      }
-    }
-    @keyframes bar-grow {
-      from { transform: scaleY(0); }
-      to   { transform: scaleY(1); }
-    }
-    @keyframes chart-reveal {
-      from { opacity: 0; transform: translateY(8px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      @keyframes pulse-glow-red  { from {} to {} }
-      @keyframes fade-up          { from {} to {} }
-      @keyframes shimmer-digit    { from {} to {} }
-      @keyframes status-bar-pulse { from {} to {} }
-      @keyframes pulse-glow-multi { from {} to {} }
-      @keyframes bar-grow         { from {} to {} }
-      @keyframes chart-reveal     { from {} to {} }
-    }
-  `;
-  document.head.appendChild(style);
-}
+const incidentDateTimeFormat = new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'full',
+  timeStyle: 'short',
+});
+
+const GLOW_SINGLE =
+  '0 0 30px rgba(255,59,48,0.9), 0 0 90px rgba(255,59,48,0.55), 0 0 170px rgba(255,59,48,0.3)';
+const GLOW_MULTI =
+  '0 0 40px rgba(255,107,53,1), 0 0 120px rgba(255,59,48,0.9), 0 0 240px rgba(255,59,48,0.55)';
 
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
+const chipStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: '4px',
+  minWidth: '64px',
+};
+
+const digitStyle: CSSProperties = {
+  fontFamily: token.fontMono,
+  fontSize: 'clamp(1.6rem, 4vw, 2.4rem)',
+  fontWeight: 700,
+  lineHeight: 1,
+  color: token.green,
+  background: token.greenMuted,
+  border: `1px solid rgba(48,209,88,0.2)`,
+  borderRadius: '10px',
+  padding: '10px 14px',
+  minWidth: '64px',
+  textAlign: 'center',
+  letterSpacing: '0.04em',
+  animation: 'shimmer-digit 2s ease-in-out infinite',
+  boxShadow: `0 0 20px rgba(48,209,88,0.12), inset 0 1px 0 rgba(255,255,255,0.05)`,
+  transition: 'color 0.3s',
+};
+
+const chipLabelStyle: CSSProperties = {
+  fontFamily: token.fontSystem,
+  fontSize: '0.65rem',
+  fontWeight: 600,
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase',
+  color: token.gray400,
+};
+
+const countdownWrapperStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: '12px',
+  animation: 'fade-up 0.6s ease-out both',
+};
+
+const countdownLabelStyle: CSSProperties = {
+  fontSize: '0.72rem',
+  fontWeight: 600,
+  letterSpacing: '0.18em',
+  textTransform: 'uppercase',
+  color: token.gray400,
+};
+
+const countdownRowStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'flex-start',
+  gap: 'clamp(8px, 2vw, 16px)',
+  flexWrap: 'wrap',
+  justifyContent: 'center',
+};
+
+const countdownSeparatorStyle: CSSProperties = {
+  fontFamily: token.fontMono,
+  fontSize: 'clamp(1.4rem, 3.5vw, 2rem)',
+  fontWeight: 300,
+  color: 'rgba(48,209,88,0.4)',
+  alignSelf: 'flex-start',
+  paddingTop: '10px',
+  lineHeight: 1,
+};
+
 /** Monospace countdown unit chip */
 function CountdownChip({ value, label }: { value: number; label: string }) {
-  const chipStyle: CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '4px',
-    minWidth: '64px',
-  };
-
-  const digitStyle: CSSProperties = {
-    fontFamily: token.fontMono,
-    fontSize: 'clamp(1.6rem, 4vw, 2.4rem)',
-    fontWeight: 700,
-    lineHeight: 1,
-    color: token.green,
-    background: token.greenMuted,
-    border: `1px solid rgba(48,209,88,0.2)`,
-    borderRadius: '10px',
-    padding: '10px 14px',
-    minWidth: '64px',
-    textAlign: 'center',
-    letterSpacing: '0.04em',
-    animation: 'shimmer-digit 2s ease-in-out infinite',
-    boxShadow: `0 0 20px rgba(48,209,88,0.12), inset 0 1px 0 rgba(255,255,255,0.05)`,
-    transition: 'color 0.3s',
-  };
-
-  const labelStyle: CSSProperties = {
-    fontFamily: token.fontSystem,
-    fontSize: '0.65rem',
-    fontWeight: 600,
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
-    color: token.gray400,
-  };
-
   return (
     <div style={chipStyle}>
       <div style={digitStyle}>{String(value).padStart(2, '0')}</div>
-      <span style={labelStyle}>{label}</span>
+      <span style={chipLabelStyle}>{label}</span>
+    </div>
+  );
+}
+
+/**
+ * Owns the once-per-second tick.
+ *
+ * This used to live in HomePage, which re-rendered the whole page — ~35 style
+ * objects, the monthly chart and every sidebar row — every second, including on
+ * days with a fire, when the countdown is not even rendered. Keeping the timer
+ * here means it only exists while the countdown is on screen, and a tick only
+ * re-renders these four chips.
+ */
+function Countdown({ since }: { since: Date }) {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const diffMs = Math.max(now.getTime() - since.getTime(), 0);
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diffMs / (1000 * 60 * 60)) % 24);
+  const minutes = Math.floor((diffMs / (1000 * 60)) % 60);
+  const seconds = Math.floor((diffMs / 1000) % 60);
+
+  return (
+    <div style={countdownWrapperStyle}>
+      <p style={countdownLabelStyle}>Time since last incident</p>
+      <div style={countdownRowStyle} data-testid="countdown">
+        <CountdownChip value={days} label="Days" />
+        <span style={countdownSeparatorStyle}>:</span>
+        <CountdownChip value={hours} label="Hours" />
+        <span style={countdownSeparatorStyle}>:</span>
+        <CountdownChip value={minutes} label="Min" />
+        <span style={countdownSeparatorStyle}>:</span>
+        <CountdownChip value={seconds} label="Sec" />
+      </div>
     </div>
   );
 }
@@ -407,9 +409,11 @@ const CHART_W = 12 * BAR_W + 11 * BAR_GAP; // 234px
 function MonthlyBarChart({
   data,
   currentMonth,
+  year,
 }: {
   data: FireMonthlyStats;
   currentMonth: number; // 1-based
+  year: number;
 }) {
   const maxCount = Math.max(...data.map((d) => d.count), 1);
 
@@ -459,7 +463,7 @@ function MonthlyBarChart({
             letterSpacing: '0.06em',
           }}
         >
-          {new Date().getFullYear()}
+          {year}
         </span>
       </div>
 
@@ -553,32 +557,429 @@ function MonthlyBarChart({
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Static styles
+//
+// These do not depend on state, so they are built once at module scope rather
+// than reallocated on every render of HomePage.
+// ---------------------------------------------------------------------------
+// Root
+const rootStyle: CSSProperties = {
+  position: 'relative',
+  minHeight: '100vh',
+  width: '100%',
+  overflow: 'hidden',
+  backgroundColor: token.black,
+  fontFamily: token.fontSystem,
+  color: token.white,
+};
+
+// Full-screen photo background
+const bgWrapperStyle: CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  zIndex: 0,
+  pointerEvents: 'none',
+};
+
+// Sidebar toggle button — lives inside the header now
+const toggleBtnStyle: CSSProperties = {
+  width: '36px',
+  height: '36px',
+  borderRadius: '10px',
+  border: `1px solid ${token.borderMid}`,
+  backgroundColor: token.glassLight,
+  color: token.white,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexShrink: 0,
+  transition: 'background-color 0.2s, border-color 0.2s',
+};
+
+// Dark overlay behind sidebar (starts below the header)
+const backdropStyle: CSSProperties = {
+  position: 'fixed',
+  top: '56px',
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: 'rgba(0,0,0,0.55)',
+  zIndex: 900,
+  backdropFilter: 'blur(2px)',
+  WebkitBackdropFilter: 'blur(2px)',
+};
+
+// Sidebar header strip
+const sidebarHeaderStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: '16px 20px',
+  borderBottom: `1px solid ${token.borderSubtle}`,
+  position: 'sticky',
+  top: 0,
+  backgroundColor: 'rgba(8,8,12,0.9)',
+  backdropFilter: 'blur(24px)',
+  WebkitBackdropFilter: 'blur(24px)',
+  zIndex: 1,
+};
+
+const sidebarCloseBtnStyle: CSSProperties = {
+  width: '32px',
+  height: '32px',
+  borderRadius: '8px',
+  border: `1px solid ${token.borderSubtle}`,
+  backgroundColor: token.glassLight,
+  color: token.gray200,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  transition: 'background-color 0.15s',
+  flexShrink: 0,
+};
+
+// Main content section
+const mainSectionStyle: CSSProperties = {
+  position: 'relative',
+  zIndex: 2,
+  minHeight: '100vh',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding:
+    'clamp(80px, 12vh, 120px) clamp(20px, 5vw, 64px) clamp(80px, 10vh, 100px)',
+  gap: 'clamp(32px, 5vh, 56px)',
+  boxSizing: 'border-box',
+};
+
+// Status label — site name + status badge row
+const statusTopRowStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: '8px',
+};
+
+// Site title
+const siteTitleStyle: CSSProperties = {
+  fontSize: 'clamp(0.65rem, 1.5vw, 0.8rem)',
+  fontWeight: 700,
+  letterSpacing: '0.22em',
+  textTransform: 'uppercase',
+  color: token.gray400,
+  margin: 0,
+};
+
+// Incident detail card
+const cardStyle: CSSProperties = {
+  width: '100%',
+  maxWidth: '600px',
+  backgroundColor: 'rgba(10,10,14,0.70)',
+  borderRadius: '16px',
+  border: `1px solid ${token.borderSubtle}`,
+  boxShadow: token.shadowDeep,
+  backdropFilter: 'blur(20px)',
+  WebkitBackdropFilter: 'blur(20px)',
+  overflow: 'hidden',
+  animation: 'fade-up 0.7s ease-out 0.1s both',
+};
+
+const cardBodyStyle: CSSProperties = {
+  padding: 'clamp(16px, 3vw, 28px) clamp(20px, 4vw, 32px)',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '20px',
+};
+
+const cardHeaderStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '10px',
+};
+
+const cardTitleStyle: CSSProperties = {
+  fontSize: '0.7rem',
+  fontWeight: 700,
+  letterSpacing: '0.18em',
+  textTransform: 'uppercase',
+  color: token.gray400,
+  margin: 0,
+};
+
+const cardDividerStyle: CSSProperties = {
+  flex: 1,
+  height: '1px',
+  backgroundColor: token.borderSubtle,
+};
+
+const cardRowStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'auto 1fr',
+  gap: '8px 16px',
+  alignItems: 'start',
+};
+
+const cardLabelStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+  fontSize: '0.72rem',
+  fontWeight: 700,
+  letterSpacing: '0.14em',
+  textTransform: 'uppercase',
+  color: token.gray400,
+  paddingTop: '1px',
+  whiteSpace: 'nowrap' as const,
+};
+
+const cardValueStyle: CSSProperties = {
+  fontSize: '0.9rem',
+  fontWeight: 500,
+  color: token.gray200,
+  lineHeight: 1.5,
+  wordBreak: 'break-word' as const,
+};
+
+// Stats pill — bottom right (positioning handled by wrapper)
+const statsPillStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '6px',
+  backgroundColor: 'rgba(8,8,12,0.82)',
+  backdropFilter: 'blur(16px)',
+  WebkitBackdropFilter: 'blur(16px)',
+  border: `1px solid ${token.borderMid}`,
+  borderRadius: '9999px',
+  padding: '6px 14px 6px 10px',
+  fontSize: '0.75rem',
+  fontWeight: 600,
+  color: token.gray200,
+  boxShadow: token.shadowSm,
+  letterSpacing: '0.02em',
+};
+
+const statsIconWrapStyle: CSSProperties = {
+  width: '18px',
+  height: '18px',
+  borderRadius: '50%',
+  backgroundColor: 'rgba(255,59,48,0.2)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  color: token.red,
+  flexShrink: 0,
+};
+
+// Sidebar incident list item
+const incidentItemBtnBase: CSSProperties = {
+  width: '100%',
+  textAlign: 'left',
+  background: 'transparent',
+  color: token.white,
+  border: `1px solid ${token.borderSubtle}`,
+  borderRadius: '10px',
+  padding: '12px 14px',
+  cursor: 'pointer',
+  transition: 'background-color 0.18s, border-color 0.18s',
+  fontSize: '0.875rem',
+  lineHeight: 1.4,
+  fontFamily: token.fontSystem,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+};
+
+// Status bar — top fixed strip (zIndex above sidebar so button is always reachable)
+const statusBarStyle: CSSProperties = {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
+  zIndex: 1100,
+  height: '56px',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '12px',
+  padding: '0 16px',
+  backgroundColor: 'rgba(6,6,9,0.75)',
+  backdropFilter: 'blur(20px)',
+  WebkitBackdropFilter: 'blur(20px)',
+  borderBottom: `1px solid ${token.borderSubtle}`,
+  boxShadow: '0 1px 0 rgba(255,255,255,0.03)',
+};
+
+const statusBarTitleStyle: CSSProperties = {
+  fontSize: '0.78rem',
+  fontWeight: 700,
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase',
+  color: token.gray400,
+  fontFamily: token.fontSystem,
+  flex: 1,
+};
+
+const headingBaseStyle: CSSProperties = {
+  fontFamily: token.fontSystem,
+  fontSize: 'clamp(6rem, 20vw, 13rem)',
+  fontWeight: 900,
+  lineHeight: 0.9,
+  margin: 0,
+  letterSpacing: '-0.04em',
+  textAlign: 'center',
+};
+
+const noHeadingStyle: CSSProperties = {
+  ...headingBaseStyle,
+  color: token.green,
+  textShadow: `0 0 40px ${token.greenGlow}, 0 0 100px rgba(48,209,88,0.2)`,
+};
+
+// ---------------------------------------------------------------------------
+// Full-screen status screens (loading / empty / error)
+// ---------------------------------------------------------------------------
+const messageScreenStyle: CSSProperties = {
+  padding: '2rem',
+  textAlign: 'center',
+  minHeight: '100vh',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: token.gray950,
+  color: token.gray200,
+  fontFamily: token.fontSystem,
+  gap: '12px',
+};
+
+const skeletonPillStyle: CSSProperties = {
+  width: '200px',
+  height: '8px',
+  borderRadius: '9999px',
+  background: `linear-gradient(90deg, ${token.gray800} 25%, ${token.gray700} 50%, ${token.gray800} 75%)`,
+  backgroundSize: '400% 100%',
+};
+
+const messageCaptionStyle: CSSProperties = {
+  margin: 0,
+  fontSize: '0.85rem',
+  color: token.gray400,
+};
+
+const messageTitleStyle: CSSProperties = {
+  margin: 0,
+  fontSize: '1.1rem',
+  fontWeight: 500,
+};
+
+function LoadingScreen() {
+  return (
+    <main style={{ ...messageScreenStyle, color: token.gray400, gap: '16px' }}>
+      <div style={skeletonPillStyle} />
+      <span
+        style={{
+          fontSize: '0.8rem',
+          letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+        }}
+      >
+        Loading incidents&hellip;
+      </span>
+    </main>
+  );
+}
+
+function EmptyScreen() {
+  return (
+    <main style={messageScreenStyle}>
+      <FlameIcon />
+      <p style={messageTitleStyle}>No fire incidents recorded.</p>
+      <p style={messageCaptionStyle}>Check back later.</p>
+    </main>
+  );
+}
+
+/**
+ * `if (!incidents)` could not tell "pending" from "failed", so an outage showed
+ * the loading skeleton forever. No error detail is surfaced: Postgrest errors
+ * name columns and constraints.
+ */
+function ErrorScreen({ onRetry }: { onRetry: () => void }) {
+  return (
+    <main style={messageScreenStyle}>
+      <FlameIcon />
+      <p style={messageTitleStyle}>Could not load incidents.</p>
+      <p style={messageCaptionStyle}>
+        The incident feed is unreachable right now.
+      </p>
+      <button type="button" onClick={onRetry} style={retryButtonStyle}>
+        Try again
+      </button>
+    </main>
+  );
+}
+
+const retryButtonStyle: CSSProperties = {
+  marginTop: '8px',
+  minHeight: '40px',
+  padding: '10px 20px',
+  borderRadius: '9999px',
+  border: `1px solid ${token.borderMid}`,
+  backgroundColor: token.glassLight,
+  color: token.white,
+  fontFamily: token.fontSystem,
+  fontSize: '0.85rem',
+  fontWeight: 600,
+  letterSpacing: '0.04em',
+  cursor: 'pointer',
+};
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
+/**
+ * How often the page re-evaluates "was the last fire today?". The per-second
+ * tick lives in <Countdown>; this only has to notice a date rollover, so the
+ * YES/NO flip at midnight lands within a minute.
+ */
+const DATE_TICK_MS = 60_000;
+
 export default function HomePage() {
-  const { data: incidents } = useQuery({
+  const {
+    data: incidents,
+    isPending,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['fireIncidents'],
-    queryFn: getFireIncidents,
+    // Wrapped: passing the function directly hands React Query's context object
+    // to the `limit` parameter.
+    queryFn: () => getFireIncidents(),
+    staleTime: DATE_TICK_MS,
   });
-  const { data: stats } = useQuery({
-    queryKey: ['fireStats'],
-    queryFn: getFireStats,
+
+  // One query behind both the stats pill and the monthly chart.
+  const { data: activity } = useQuery({
+    queryKey: ['fireYearActivity'],
+    queryFn: getFireYearActivity,
+    staleTime: DATE_TICK_MS,
   });
-  const { data: monthlyData } = useQuery({
-    queryKey: ['fireMonthlyStats'],
-    queryFn: getFireIncidentsByMonth,
-  });
-  const [now, setNow] = useState(new Date());
+
+  const stats = activity?.stats;
+  const monthlyData = activity?.monthly;
+
+  const [now, setNow] = useState(() => new Date());
   const [selectedIncidentId, setSelectedIncidentId] = useState<number | null>(
     null,
   );
   const [isSidebarOpen, setSidebarOpen] = useState(false);
 
-  // Inject keyframe animations once on mount
   useEffect(() => {
-    injectAnimations();
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => setNow(new Date()), 1000);
+    const interval = setInterval(() => setNow(new Date()), DATE_TICK_MS);
     return () => clearInterval(interval);
   }, []);
 
@@ -606,76 +1007,16 @@ export default function HomePage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // ------------------------------------------------------------------
-  // Loading state
-  // ------------------------------------------------------------------
-  if (!incidents) {
-    return (
-      <main
-        style={{
-          minHeight: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: token.gray950,
-          color: token.gray400,
-          fontFamily: token.fontSystem,
-          gap: '16px',
-        }}
-      >
-        {/* Animated skeleton pill */}
-        <div
-          style={{
-            width: '200px',
-            height: '8px',
-            borderRadius: '9999px',
-            background: `linear-gradient(90deg, ${token.gray800} 25%, ${token.gray700} 50%, ${token.gray800} 75%)`,
-            backgroundSize: '400% 100%',
-          }}
-        />
-        <span
-          style={{
-            fontSize: '0.8rem',
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-          }}
-        >
-          Loading incidents&hellip;
-        </span>
-      </main>
-    );
+  if (isError) {
+    return <ErrorScreen onRetry={() => void refetch()} />;
   }
 
-  // ------------------------------------------------------------------
-  // Empty state
-  // ------------------------------------------------------------------
+  if (isPending || !incidents) {
+    return <LoadingScreen />;
+  }
+
   if (incidents.length === 0) {
-    return (
-      <main
-        style={{
-          padding: '2rem',
-          textAlign: 'center',
-          minHeight: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: token.gray950,
-          color: token.gray200,
-          fontFamily: token.fontSystem,
-          gap: '12px',
-        }}
-      >
-        <FlameIcon />
-        <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 500 }}>
-          No fire incidents recorded.
-        </p>
-        <p style={{ margin: 0, fontSize: '0.85rem', color: token.gray400 }}>
-          Check back later.
-        </p>
-      </main>
-    );
+    return <EmptyScreen />;
   }
 
   // ------------------------------------------------------------------
@@ -694,41 +1035,14 @@ export default function HomePage() {
     : [];
   const todayCount = todayIncidents.length;
   const isMultipleToday = todayCount > 1;
-  const diffMs = now.getTime() - lastDate.getTime();
-  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diffMs / (1000 * 60 * 60)) % 24);
-  const minutes = Math.floor((diffMs / (1000 * 60)) % 60);
-  const seconds = Math.floor((diffMs / 1000) % 60);
 
-  const formattedSelectedDate = new Date(
-    selectedIncident.datetime,
-  ).toLocaleString(undefined, {
-    dateStyle: 'full',
-    timeStyle: 'short',
-  });
+  const formattedSelectedDate = incidentDateTimeFormat.format(
+    new Date(selectedIncident.datetime),
+  );
 
   // ------------------------------------------------------------------
   // Styles
   // ------------------------------------------------------------------
-
-  // Root
-  const rootStyle: CSSProperties = {
-    position: 'relative',
-    minHeight: '100vh',
-    width: '100%',
-    overflow: 'hidden',
-    backgroundColor: token.black,
-    fontFamily: token.fontSystem,
-    color: token.white,
-  };
-
-  // Full-screen photo background
-  const bgWrapperStyle: CSSProperties = {
-    position: 'absolute',
-    inset: 0,
-    zIndex: 0,
-    pointerEvents: 'none',
-  };
 
   // Multi-layer overlay: bottom-dark vignette + top dark gradient + state tint
   const overlayGradientStyle: CSSProperties = {
@@ -753,35 +1067,6 @@ export default function HomePage() {
         `,
   };
 
-  // Sidebar toggle button — lives inside the header now
-  const toggleBtnStyle: CSSProperties = {
-    width: '36px',
-    height: '36px',
-    borderRadius: '10px',
-    border: `1px solid ${token.borderMid}`,
-    backgroundColor: token.glassLight,
-    color: token.white,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    transition: 'background-color 0.2s, border-color 0.2s',
-  };
-
-  // Dark overlay behind sidebar (starts below the header)
-  const backdropStyle: CSSProperties = {
-    position: 'fixed',
-    top: '56px',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    zIndex: 900,
-    backdropFilter: 'blur(2px)',
-    WebkitBackdropFilter: 'blur(2px)',
-  };
-
   // Sidebar — glassmorphism panel (starts below the header)
   const sidebarStyle: CSSProperties = {
     position: 'fixed',
@@ -803,94 +1088,20 @@ export default function HomePage() {
     overflowY: 'auto',
   };
 
-  // Sidebar header strip
-  const sidebarHeaderStyle: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '16px 20px',
-    borderBottom: `1px solid ${token.borderSubtle}`,
-    position: 'sticky',
-    top: 0,
-    backgroundColor: 'rgba(8,8,12,0.9)',
-    backdropFilter: 'blur(24px)',
-    WebkitBackdropFilter: 'blur(24px)',
-    zIndex: 1,
-  };
-
-  const sidebarCloseBtnStyle: CSSProperties = {
-    width: '32px',
-    height: '32px',
-    borderRadius: '8px',
-    border: `1px solid ${token.borderSubtle}`,
-    backgroundColor: token.glassLight,
-    color: token.gray200,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transition: 'background-color 0.15s',
-    flexShrink: 0,
-  };
-
-  // Main content section
-  const mainSectionStyle: CSSProperties = {
-    position: 'relative',
-    zIndex: 2,
-    minHeight: '100vh',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding:
-      'clamp(80px, 12vh, 120px) clamp(20px, 5vw, 64px) clamp(80px, 10vh, 100px)',
-    gap: 'clamp(32px, 5vh, 56px)',
-    boxSizing: 'border-box',
-  };
-
-  // Status label — site name + status badge row
-  const statusTopRowStyle: CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '8px',
-  };
-
-  // Site title
-  const siteTitleStyle: CSSProperties = {
-    fontSize: 'clamp(0.65rem, 1.5vw, 0.8rem)',
-    fontWeight: 700,
-    letterSpacing: '0.22em',
-    textTransform: 'uppercase',
-    color: token.gray400,
-    margin: 0,
-  };
-
-  // Big YES/NO heading
+  // Big YES heading.
+  //
+  // The glow was previously an animated `text-shadow`, which is not
+  // compositor-accelerated: it repainted a clamp(6rem, 20vw, 13rem) text layer
+  // every frame, forever, on top of eight backdrop-filter surfaces. The shadow
+  // is now static and only `opacity` animates.
   const yesHeadingStyle: CSSProperties = {
-    fontFamily: token.fontSystem,
-    fontSize: 'clamp(6rem, 20vw, 13rem)',
-    fontWeight: 900,
-    lineHeight: 0.9,
-    margin: 0,
-    letterSpacing: '-0.04em',
+    ...headingBaseStyle,
     color: token.red,
+    textShadow: isMultipleToday ? GLOW_MULTI : GLOW_SINGLE,
     animation: isMultipleToday
-      ? 'pulse-glow-multi 0.9s ease-in-out infinite'
-      : 'pulse-glow-red 2s ease-in-out infinite',
-    textAlign: 'center',
-  };
-
-  const noHeadingStyle: CSSProperties = {
-    fontFamily: token.fontSystem,
-    fontSize: 'clamp(6rem, 20vw, 13rem)',
-    fontWeight: 900,
-    lineHeight: 0.9,
-    margin: 0,
-    letterSpacing: '-0.04em',
-    color: token.green,
-    textShadow: `0 0 40px ${token.greenGlow}, 0 0 100px rgba(48,209,88,0.2)`,
-    textAlign: 'center',
+      ? 'glow-pulse-fast 0.9s ease-in-out infinite'
+      : 'glow-pulse 2s ease-in-out infinite',
+    willChange: 'opacity',
   };
 
   // Question label above heading
@@ -938,150 +1149,12 @@ export default function HomePage() {
     lineHeight: 1,
   };
 
-  // Incident detail card
-  const cardStyle: CSSProperties = {
-    width: '100%',
-    maxWidth: '600px',
-    backgroundColor: 'rgba(10,10,14,0.70)',
-    borderRadius: '16px',
-    border: `1px solid ${token.borderSubtle}`,
-    boxShadow: token.shadowDeep,
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
-    overflow: 'hidden',
-    animation: 'fade-up 0.7s ease-out 0.1s both',
-  };
-
   // Card top accent bar
   const cardAccentBarStyle: CSSProperties = {
     height: '3px',
     background: isToday
       ? `linear-gradient(to right, ${token.red}, ${token.orange}, transparent)`
       : `linear-gradient(to right, ${token.green}, rgba(48,209,88,0.3), transparent)`,
-  };
-
-  const cardBodyStyle: CSSProperties = {
-    padding: 'clamp(16px, 3vw, 28px) clamp(20px, 4vw, 32px)',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '20px',
-  };
-
-  const cardHeaderStyle: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-  };
-
-  const cardTitleStyle: CSSProperties = {
-    fontSize: '0.7rem',
-    fontWeight: 700,
-    letterSpacing: '0.18em',
-    textTransform: 'uppercase',
-    color: token.gray400,
-    margin: 0,
-  };
-
-  const cardDividerStyle: CSSProperties = {
-    flex: 1,
-    height: '1px',
-    backgroundColor: token.borderSubtle,
-  };
-
-  const cardRowStyle: CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: 'auto 1fr',
-    gap: '8px 16px',
-    alignItems: 'start',
-  };
-
-  const cardLabelStyle: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    fontSize: '0.72rem',
-    fontWeight: 700,
-    letterSpacing: '0.14em',
-    textTransform: 'uppercase',
-    color: token.gray400,
-    paddingTop: '1px',
-    whiteSpace: 'nowrap' as const,
-  };
-
-  const cardValueStyle: CSSProperties = {
-    fontSize: '0.9rem',
-    fontWeight: 500,
-    color: token.gray200,
-    lineHeight: 1.5,
-    wordBreak: 'break-word' as const,
-  };
-
-  // Stats pill — bottom right (positioning handled by wrapper)
-  const statsPillStyle: CSSProperties = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '6px',
-    backgroundColor: 'rgba(8,8,12,0.82)',
-    backdropFilter: 'blur(16px)',
-    WebkitBackdropFilter: 'blur(16px)',
-    border: `1px solid ${token.borderMid}`,
-    borderRadius: '9999px',
-    padding: '6px 14px 6px 10px',
-    fontSize: '0.75rem',
-    fontWeight: 600,
-    color: token.gray200,
-    boxShadow: token.shadowSm,
-    letterSpacing: '0.02em',
-  };
-
-  const statsIconWrapStyle: CSSProperties = {
-    width: '18px',
-    height: '18px',
-    borderRadius: '50%',
-    backgroundColor: 'rgba(255,59,48,0.2)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: token.red,
-    flexShrink: 0,
-  };
-
-  // Sidebar incident list item
-  const incidentItemBtnBase: CSSProperties = {
-    width: '100%',
-    textAlign: 'left',
-    background: 'transparent',
-    color: token.white,
-    border: `1px solid ${token.borderSubtle}`,
-    borderRadius: '10px',
-    padding: '12px 14px',
-    cursor: 'pointer',
-    transition: 'background-color 0.18s, border-color 0.18s',
-    fontSize: '0.875rem',
-    lineHeight: 1.4,
-    fontFamily: token.fontSystem,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-  };
-
-  // Status bar — top fixed strip (zIndex above sidebar so button is always reachable)
-  const statusBarStyle: CSSProperties = {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 1100,
-    height: '56px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    padding: '0 16px',
-    backgroundColor: 'rgba(6,6,9,0.75)',
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
-    borderBottom: `1px solid ${token.borderSubtle}`,
-    boxShadow: '0 1px 0 rgba(255,255,255,0.03)',
   };
 
   const statusBarAccentStyle: CSSProperties = {
@@ -1093,16 +1166,6 @@ export default function HomePage() {
     background: isToday
       ? `linear-gradient(to bottom, ${token.red}, ${token.orange})`
       : `linear-gradient(to bottom, ${token.green}, rgba(48,209,88,0.4))`,
-  };
-
-  const statusBarTitleStyle: CSSProperties = {
-    fontSize: '0.78rem',
-    fontWeight: 700,
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
-    color: token.gray400,
-    fontFamily: token.fontSystem,
-    flex: 1,
   };
 
   const statusBadgeStyle: CSSProperties = {
@@ -1152,7 +1215,6 @@ export default function HomePage() {
           priority
           sizes="100vw"
           style={{ objectFit: 'cover' }}
-          unoptimized
         />
       </div>
 
@@ -1198,6 +1260,7 @@ export default function HomePage() {
       <aside
         id="incident-sidebar"
         aria-hidden={!isSidebarOpen}
+        inert={!isSidebarOpen}
         style={sidebarStyle}
       >
         {/* Sidebar header */}
@@ -1222,8 +1285,11 @@ export default function HomePage() {
                 letterSpacing: '0.04em',
               }}
             >
-              {incidents.length} recorded incident
-              {incidents.length !== 1 ? 's' : ''}
+              {incidents.length === INCIDENT_LIST_LIMIT
+                ? `${INCIDENT_LIST_LIMIT} most recent incidents`
+                : `${incidents.length} recorded incident${
+                    incidents.length !== 1 ? 's' : ''
+                  }`}
             </p>
           </div>
           <button
@@ -1314,15 +1380,7 @@ export default function HomePage() {
                           aria-hidden
                         />
                       )}
-                      {new Date(incident.datetime).toLocaleDateString(
-                        undefined,
-                        {
-                          weekday: 'short',
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        },
-                      )}
+                      {incidentDateFormat.format(new Date(incident.datetime))}
                     </span>
                     <span
                       style={{
@@ -1439,19 +1497,8 @@ export default function HomePage() {
           ) : (
             <>
               <h1 style={noHeadingStyle}>NO</h1>
-              {/* Countdown display */}
-              <div style={countdownWrapperStyle}>
-                <p style={countdownLabelStyle}>Time since last incident</p>
-                <div style={countdownRowStyle} data-testid="countdown">
-                  <CountdownChip value={days} label="Days" />
-                  <span style={countdownSeparatorStyle}>:</span>
-                  <CountdownChip value={hours} label="Hours" />
-                  <span style={countdownSeparatorStyle}>:</span>
-                  <CountdownChip value={minutes} label="Min" />
-                  <span style={countdownSeparatorStyle}>:</span>
-                  <CountdownChip value={seconds} label="Sec" />
-                </div>
-              </div>
+              {/* Owns its own per-second timer; mounted only on this branch */}
+              <Countdown since={lastDate} />
             </>
           )}
         </div>
@@ -1550,6 +1597,7 @@ export default function HomePage() {
             <MonthlyBarChart
               data={monthlyData}
               currentMonth={now.getMonth() + 1}
+              year={now.getFullYear()}
             />
           )}
 

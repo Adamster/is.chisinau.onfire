@@ -1,13 +1,77 @@
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config';
+import {
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  ALLOWED_IMAGE_HOSTS,
+} from '../config';
+
+/**
+ * Columns we actually render. Listed explicitly rather than `*` so a future
+ * column (internal notes, reporter contact, ...) is not shipped to the browser
+ * by accident.
+ */
+const INCIDENT_COLUMNS = 'id,datetime,photo_url,street,source_url';
+
+/**
+ * `z.string().url()` is scheme-agnostic: it accepts `javascript:`, `data:` and
+ * URLs whose path contains CSS-significant characters. `photo_url` reaches an
+ * `<Image src>` and the OpenGraph card, so restrict it to https on a known host.
+ * With no hosts configured we still enforce https rather than failing closed.
+ */
+function isAllowedPhotoUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'https:') return false;
+  return ALLOWED_IMAGE_HOSTS.length === 0
+    ? true
+    : ALLOWED_IMAGE_HOSTS.includes(url.host);
+}
+
+export const PhotoUrlSchema = z
+  .string()
+  .url()
+  .refine(
+    isAllowedPhotoUrl,
+    'photo_url must be an https URL on an allowed host',
+  );
+
+/**
+ * `source_url` is rendered as an `href` and passed to `new URL()` during render,
+ * so an unvalidated string is two bugs at once: `javascript:...` executes on
+ * click (an href is not an <img src>, and the CSP cannot help — `script-src`
+ * needs 'unsafe-inline' here, which permits javascript: URIs), and a non-empty
+ * non-URL throws and blanks the page.
+ *
+ * Unlike `photo_url`, an unusable value degrades to '' instead of rejecting the
+ * row: the source link is optional decoration, so losing it beats losing the
+ * whole incident feed.
+ */
+function isHttpUrl(raw: string): boolean {
+  if (!raw) return false;
+  try {
+    const { protocol } = new URL(raw);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+export const SourceUrlSchema = z
+  .string()
+  .default('')
+  .transform((raw) => (isHttpUrl(raw) ? raw : ''));
 
 export const FireIncidentSchema = z.object({
   id: z.number(),
   datetime: z.string(),
-  photo_url: z.string().url(),
+  photo_url: PhotoUrlSchema,
   street: z.string(),
-  source_url: z.string().default(''),
+  source_url: SourceUrlSchema,
 });
 
 export type FireIncident = z.infer<typeof FireIncidentSchema>;
@@ -31,12 +95,22 @@ function getSupabaseClient() {
   return cachedClient;
 }
 
-export async function getFireIncidents(): Promise<FireIncident[]> {
+/**
+ * Newest-first incident list for the sidebar and the selected-photo background.
+ * Bounded: the sidebar only ever shows recent history, and an unbounded
+ * `select` grows without limit as the table does.
+ */
+export const INCIDENT_LIST_LIMIT = 100;
+
+export async function getFireIncidents(
+  limit: number = INCIDENT_LIST_LIMIT,
+): Promise<FireIncident[]> {
   const client = getSupabaseClient();
   const { data, error } = await client
     .from('fire_incidents')
-    .select('*')
-    .order('datetime', { ascending: false });
+    .select(INCIDENT_COLUMNS)
+    .order('datetime', { ascending: false })
+    .limit(limit);
 
   if (error) {
     throw error;
@@ -54,7 +128,7 @@ export async function getLastFire(): Promise<FireIncident | null> {
   const client = getSupabaseClient();
   const { data, error } = await client
     .from('fire_incidents')
-    .select('*')
+    .select(INCIDENT_COLUMNS)
     .order('datetime', { ascending: false })
     .limit(1);
 
@@ -75,30 +149,6 @@ export const FireMonthlyStatsSchema = z.array(
 );
 export type FireMonthlyStats = z.infer<typeof FireMonthlyStatsSchema>;
 
-export async function getFireIncidentsByMonth(): Promise<FireMonthlyStats> {
-  const client = getSupabaseClient();
-  const now = new Date();
-  const startOfYear = new Date(now.getFullYear(), 0, 1).toISOString();
-
-  const { data, error } = await client
-    .from('fire_incidents')
-    .select('*')
-    .gte('datetime', startOfYear);
-
-  if (error) throw error;
-
-  const parsed = z.array(FireIncidentSchema).parse(data ?? []);
-  const counts = Array.from({ length: 12 }, (_, i) => ({
-    month: i + 1,
-    count: 0,
-  }));
-  for (const incident of parsed) {
-    const m = new Date(incident.datetime).getMonth();
-    counts[m].count++;
-  }
-  return FireMonthlyStatsSchema.parse(counts);
-}
-
 export const FireStatsSchema = z.object({
   month: z.number(),
   year: z.number(),
@@ -106,24 +156,55 @@ export const FireStatsSchema = z.object({
 
 export type FireStats = z.infer<typeof FireStatsSchema>;
 
-export async function getFireStats(): Promise<FireStats> {
+export type FireYearActivity = {
+  stats: FireStats;
+  monthly: FireMonthlyStats;
+};
+
+const YearRowSchema = z.object({ datetime: z.string() });
+
+/**
+ * Month count, year count and the per-month chart from a single query.
+ *
+ * Previously this was three round trips (`getFireStats` fetched every row of the
+ * month *and* every row of the year, `getFireIncidentsByMonth` fetched the year
+ * again) each pulling full rows in order to call `.length` on them. One
+ * datetime-only query over the current year serves all three.
+ */
+export async function getFireYearActivity(): Promise<FireYearActivity> {
   const client = getSupabaseClient();
   const now = new Date();
-  const startOfMonth = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    1,
-  ).toISOString();
-  const startOfYear = new Date(now.getFullYear(), 0, 1).toISOString();
+  const year = now.getFullYear();
+  const startOfYear = new Date(year, 0, 1).toISOString();
 
-  const [monthRes, yearRes] = await Promise.all([
-    client.from('fire_incidents').select('*').gte('datetime', startOfMonth),
-    client.from('fire_incidents').select('*').gte('datetime', startOfYear),
-  ]);
+  const { data, error } = await client
+    .from('fire_incidents')
+    .select('datetime')
+    .gte('datetime', startOfYear);
 
-  if (monthRes.error) throw monthRes.error;
-  if (yearRes.error) throw yearRes.error;
+  if (error) throw error;
 
-  const stats = { month: monthRes.data.length, year: yearRes.data.length };
-  return FireStatsSchema.parse(stats);
+  const rows = z.array(YearRowSchema).parse(data ?? []);
+  const monthly = Array.from({ length: 12 }, (_, i) => ({
+    month: i + 1,
+    count: 0,
+  }));
+
+  const currentMonth = now.getMonth();
+  let monthCount = 0;
+  let yearCount = 0;
+
+  for (const row of rows) {
+    const date = new Date(row.datetime);
+    // `gte` has no upper bound, so a future-dated row could land in the wrong year.
+    if (date.getFullYear() !== year) continue;
+    monthly[date.getMonth()].count++;
+    yearCount++;
+    if (date.getMonth() === currentMonth) monthCount++;
+  }
+
+  return {
+    stats: FireStatsSchema.parse({ month: monthCount, year: yearCount }),
+    monthly: FireMonthlyStatsSchema.parse(monthly),
+  };
 }
