@@ -40,12 +40,38 @@ export const PhotoUrlSchema = z
     'photo_url must be an https URL on an allowed host',
   );
 
+/**
+ * `source_url` is rendered as an `href` and passed to `new URL()` during render,
+ * so an unvalidated string is two bugs at once: `javascript:...` executes on
+ * click (an href is not an <img src>, and the CSP cannot help — `script-src`
+ * needs 'unsafe-inline' here, which permits javascript: URIs), and a non-empty
+ * non-URL throws and blanks the page.
+ *
+ * Unlike `photo_url`, an unusable value degrades to '' instead of rejecting the
+ * row: the source link is optional decoration, so losing it beats losing the
+ * whole incident feed.
+ */
+function isHttpUrl(raw: string): boolean {
+  if (!raw) return false;
+  try {
+    const { protocol } = new URL(raw);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+export const SourceUrlSchema = z
+  .string()
+  .default('')
+  .transform((raw) => (isHttpUrl(raw) ? raw : ''));
+
 export const FireIncidentSchema = z.object({
   id: z.number(),
   datetime: z.string(),
   photo_url: PhotoUrlSchema,
   street: z.string(),
-  source_url: z.string().default(''),
+  source_url: SourceUrlSchema,
 });
 
 export type FireIncident = z.infer<typeof FireIncidentSchema>;

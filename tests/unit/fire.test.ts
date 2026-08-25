@@ -19,11 +19,17 @@ let getLastFire: FireApi['getLastFire'];
 let getFireIncidents: FireApi['getFireIncidents'];
 let getFireYearActivity: FireApi['getFireYearActivity'];
 let PhotoUrlSchema: FireApi['PhotoUrlSchema'];
+let SourceUrlSchema: FireApi['SourceUrlSchema'];
 
 beforeAll(async () => {
   server.listen();
-  ({ getLastFire, getFireIncidents, getFireYearActivity, PhotoUrlSchema } =
-    await import('../../src/shared/api/fire'));
+  ({
+    getLastFire,
+    getFireIncidents,
+    getFireYearActivity,
+    PhotoUrlSchema,
+    SourceUrlSchema,
+  } = await import('../../src/shared/api/fire'));
 });
 
 afterEach(() => {
@@ -132,5 +138,46 @@ describe('getFireIncidents validation', () => {
     );
 
     await expect(getFireIncidents()).rejects.toThrow('Invalid data');
+  });
+});
+
+// source_url lands in an href and in `new URL()` during render, so it degrades
+// to '' rather than rejecting the row — the link is optional decoration.
+describe('SourceUrlSchema', () => {
+  it.each([
+    ['an https article url', 'https://stiri.md/article/123'],
+    ['an http article url', 'http://stiri.md/article/123'],
+  ])('passes through %s', (_label, value) => {
+    expect(SourceUrlSchema.parse(value)).toBe(value);
+  });
+
+  it.each([
+    ['javascript: scheme', 'javascript:alert(1)'],
+    ['data: scheme', 'data:text/html,<script>alert(1)</script>'],
+    ['a non-empty non-url', 'see the evening news'],
+    ['an empty string', ''],
+    ['a missing value', undefined],
+  ])('degrades %s to an empty string', (_label, value) => {
+    expect(SourceUrlSchema.parse(value)).toBe('');
+  });
+
+  it('strips an unusable source without dropping the incident', async () => {
+    server.use(
+      http.get('https://supabase.test/rest/v1/fire_incidents', () =>
+        HttpResponse.json([
+          {
+            id: 1,
+            datetime: '2026-08-22T10:00:00Z',
+            photo_url: 'https://supabase.test/storage/photo.jpg',
+            street: 'Stefan cel Mare',
+            source_url: 'javascript:alert(1)',
+          },
+        ]),
+      ),
+    );
+
+    const [incident] = await getFireIncidents();
+    expect(incident.street).toBe('Stefan cel Mare');
+    expect(incident.source_url).toBe('');
   });
 });
